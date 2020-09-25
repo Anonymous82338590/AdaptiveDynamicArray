@@ -205,7 +205,7 @@ int main() {
                 stree->Swap(start1, end1, start2, end2);
                 break;
             }
-            
+
         }
         numUpdate++;
 
