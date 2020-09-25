@@ -52,7 +52,7 @@ int* RangeDistributionRandom( int num, int min, int max) {
 }
 
 int main(int argc, char** argv) {
-    string filepath[3];// = {"insert.csv", "insertLog.txt"};
+    string filepath[3];
     filepath[0] = argv[1];
     filepath[1] = argv[2];
     ofstream finstant, flog, ffinal;
@@ -64,13 +64,12 @@ int main(int argc, char** argv) {
     int iniNum = 10000;
     int danodesize = 20;
     int operations = 1000000;
-    int InsertActions = operations * 2 / 10;
-    int DeleteActions = operations * 2 / 10;
-    int ReorderActions = operations * 2 / 10;
-    int SwapActions = operations * 2 / 10;
-    int MoveActions = operations * 2 / 10;
-    int TotalActions = DeleteActions + InsertActions + ReorderActions+SwapActions + MoveActions;
-    printf("%d, %d, %d, %d, %d\n", InsertActions, DeleteActions, ReorderActions, SwapActions, MoveActions);
+    int InsertActions = operations * 25 / 100;
+    int DeleteActions = operations * 25 / 100;
+    int ReorderActions = operations * 25 / 100;
+    int SwapActions = operations * 25 / 100;
+    int TotalActions = DeleteActions + InsertActions + ReorderActions+SwapActions ;
+    printf("%d, %d, %d, %d\n", InsertActions, DeleteActions, ReorderActions, SwapActions);
     printf("# of operations = %d\n", operations);
     int CurOutputNum = 0;
 
@@ -82,10 +81,6 @@ int main(int argc, char** argv) {
     }
     for (int y = 0; y < SwapActions; y++) {
         a[ua] = 5;
-        ua++;
-    }
-    for (int y = 0; y < MoveActions; y++) {
-        a[ua] = 6;
         ua++;
     }
     for (int y = 0; y < InsertActions; y++) {
@@ -120,12 +115,10 @@ int main(int argc, char** argv) {
 
     delete []array;
     int NumDA, NumDANL, NumST;
-    //da->PrintTree();
     cout<<"da depth = "<<da->Depth() << endl;
     int DAdepth = 1, DANLdepth = 1, DAODPdepth = 1, STdepth = stree->Depth();
     int numUpdate = 0;
     for (int lt = 0; lt < TotalActions; lt++) {
-        //printf("lt = %d\n", lt);
         if (lt % 5000 == 0) {
             cout<<"lt = "<<lt;
             cout<<"da depth = "<<da->Depth() << endl;
@@ -211,33 +204,6 @@ int main(int argc, char** argv) {
                 danolimit->Swap(start1, end1, start2, end2);
                 da->Swap(start1, end1, start2, end2);
                 stree->Swap(start1, end1, start2, end2);
-
-                break;
-            }
-            case 6: //move
-            {
-                int b[3] = {};
-                for (int & j : b) {
-                    j = RandomInt(1, NowTotalNum);
-                }
-                sort(b, b + 3);
-                if (b[1] == b[2]) {
-                    continue;
-                }
-                int start1, end1, start2;
-
-                if (RandomInt(1, 10) % 2 == 1) {
-                    start1 = b[0];
-                    end1 = b[1];
-                    start2 = b[2];
-                } else {
-                    start1 = b[1];
-                    end1 = b[2];
-                    start2 = b[0];
-                }
-                danolimit->Move(start1, end1, start2);
-                da->Move(start1, end1, start2);
-                stree->Move(start1, end1, start2);
 
                 break;
             }

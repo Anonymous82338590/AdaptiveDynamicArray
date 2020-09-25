@@ -62,13 +62,12 @@ int main(int argc, char** argv) {
     int iniNum = 10000;
     int danodesize = 20;
     int operations = 1000000;
-    int InsertActions = operations * 2 / 10;
-    int DeleteActions = operations * 2 / 10;
-    int ReorderActions = operations * 2 / 10;
-    int SwapActions = operations * 2 / 10;
-    int MoveActions = operations * 2 / 10;
-    int TotalActions = DeleteActions + InsertActions + ReorderActions+SwapActions + MoveActions;
-    printf("%d, %d, %d, %d, %d\n", InsertActions, DeleteActions, ReorderActions, SwapActions, MoveActions);
+    int InsertActions = operations * 25 / 100;
+    int DeleteActions = operations * 25 / 100;
+    int ReorderActions = operations * 25 / 100;
+    int SwapActions = operations * 25 / 100;
+    int TotalActions = DeleteActions + InsertActions + ReorderActions+SwapActions ;
+    printf("%d, %d, %d, %d\n", InsertActions, DeleteActions, ReorderActions, SwapActions);
     printf("# of operations = %d\n", operations);
     int CurOutputNum = 0;
 
@@ -82,10 +81,6 @@ int main(int argc, char** argv) {
         a[ua] = 5;
         ua++;
     }
-    for (int y = 0; y < MoveActions; y++) {
-        a[ua] = 6;
-        ua++;
-    }
     for (int y = 0; y < InsertActions; y++) {
         a[ua] = 2;
         ua++;
@@ -94,6 +89,7 @@ int main(int argc, char** argv) {
         a[ua] = 3;
         ua++;
     }
+
 
     shuffle(a, a + TotalActions, generator());
     //random_shuffle(&a[DeleteActions+InsertActions], &a[TotalActions]);
@@ -207,33 +203,6 @@ int main(int argc, char** argv) {
                 danolimit->Swap(start1, end1, start2, end2);
                 da->Swap(start1, end1, start2, end2);
                 stree->Swap(start1, end1, start2, end2);
-
-                break;
-            }
-            case 6: //move
-            {
-                int a[3] = {};
-                for (int & j : a) {
-                    j = RandomInt(1, NowTotalNum);
-                }
-                sort(a, a+3);
-                if (a[1] == a[2]) {
-                    continue;
-                }
-                int start1, end1, start2;
-
-                if (RandomInt(1, 10) % 2 == 1) {
-                    start1 = a[0];
-                    end1 = a[1];
-                    start2 = a[2];
-                } else {
-                    start1 = a[1];
-                    end1 = a[2];
-                    start2 = a[0];
-                }
-                danolimit->Move(start1, end1, start2);
-                da->Move(start1, end1, start2);
-                stree->Move(start1, end1, start2);
 
                 break;
             }
