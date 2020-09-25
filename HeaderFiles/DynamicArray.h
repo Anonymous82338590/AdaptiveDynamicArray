@@ -42,7 +42,7 @@ public:
 
     int NumOfItems() const { return NumItems; }
 
-    void PrintTree();
+    void PrintTree() const;
 
     void PrintDA();
 
@@ -75,7 +75,7 @@ public:
     void
     insertIntoNodeAfterSplitting(NodeDA *n, int leftIndex, int sumKeysRight, NodeDA *right, bool needGoupwards = true);
 
-    int pathToRoot(NodeDA *child);
+    int pathToRoot(NodeDA *child) const;
 
     void deleteEntry(NodeDA *n, int indexInNode);
 
@@ -316,6 +316,8 @@ public:
                                                                int numLeafToDelete);
 
     int Query(int start) const;
+
+    void PrintArray();
 };
 
 DynamicArray *NewDynamicArray(int * & array, int numItems, int degree);

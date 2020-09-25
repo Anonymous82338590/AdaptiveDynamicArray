@@ -62,6 +62,7 @@ size_t myPow(int x, int p) {
     if (p%2 == 0) return tmp * tmp;
     else return x * tmp * tmp;
 }
+/*
 size_t getNextStart(size_t start1, size_t offset, size_t childCapacity, size_t layerCapacity, size_t childIdx) {
     size_t r = childCapacity * childIdx ;
     if ((start1 + offset) % childCapacity == 0) {
@@ -70,9 +71,12 @@ size_t getNextStart(size_t start1, size_t offset, size_t childCapacity, size_t l
         if (r >= start1 + offset) {
             return r - offset;
         } else {
+            TimeVar time1 = timeNow();
             for (int i = start1 + 1; i < start1 + childCapacity; ++i) {
                 size_t x = (i + offset) % layerCapacity;
                 if ( x / childCapacity == childIdx ) {
+                    TimeVar time2 = timeNow();
+                    printf("time in getNextStart loop is %lld\n", duration(time2-time1));
                     return i;
                 }
             }
@@ -80,6 +84,24 @@ size_t getNextStart(size_t start1, size_t offset, size_t childCapacity, size_t l
         }
     }
 }
+*/
+
+size_t getNextStart(size_t start1, size_t offset, size_t childCapacity, size_t layerCapacity, size_t childIdx) {
+    size_t r = childCapacity * childIdx ;
+    if ((start1 + offset) % childCapacity == 0) {
+        return start1 + childCapacity;
+    } else {
+        if (r >= start1 + offset) {
+            return r - offset;
+        } else {
+            size_t r1 = (start1 + offset) % layerCapacity;
+            size_t r2 = r1 % childCapacity;
+            size_t x = childCapacity - r2;
+            return start1 + x;
+        }
+    }
+}
+
 size_t doubleTimes = 0;
 double threshold = 0.3;
 static size_t totalHeight;

@@ -24,7 +24,7 @@ public:
         Capacity = capacity;
         Root = nullptr;
     }
-    ~CountedBtree() { delete Root; }
+    ~CountedBtree();
 
     void PrintTree() const;
 

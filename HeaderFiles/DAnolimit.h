@@ -33,7 +33,7 @@ public:
     NodeForDAnolimit *Root;
     int Min;
     DAnolimit(int numItems, int capacity);
-    ~DAnolimit(){ delete Root; }
+    ~DAnolimit();
     int *RangeQuery(int, int, int *) const;
     int NumOfItems() { return NumItems; }
     int Depth();

@@ -35,6 +35,34 @@ DAnolimit::DAnolimit(int numItems, int capacity){
     Root = new NodeForDAnolimit(Capacity);
 }
 
+DAnolimit::~DAnolimit() {
+    std::list<NodeForDAnolimit *> toDelete;
+    std::list<NodeForDAnolimit *> toFindChild;
+    toFindChild.push_back(Root);
+    while (!toFindChild.empty()) {
+        NodeForDAnolimit * ele = toFindChild.front();
+        if (ele != nullptr) {
+            toFindChild.pop_front();
+            if (ele->IsLeaf) {
+                for (int i = 0; i < ele->NumOfKeys; ++i) {
+                    int * s = reinterpret_cast<int *>(ele->Pointers[i]);
+                    delete []s;
+                }
+                delete ele;
+            } else {
+                for (int i = 0; i < ele->NumOfKeys; ++i) {
+                    toFindChild.push_back(ele->Pointers[i]);
+                }
+                toDelete.push_back(ele);
+            }
+        }
+    }
+    while (!toDelete.empty()) {
+        NodeForDAnolimit * ele = toDelete.front();
+        toDelete.pop_front();
+        delete ele;
+    }
+}
 
 int DAnolimit::Query(int pos) {
     if (pos > NumItems) {

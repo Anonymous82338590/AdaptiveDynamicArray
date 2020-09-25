@@ -78,6 +78,30 @@ CountedBtree* NewCBTreeForArray(int order, int num) {
     return t;
 }
 
+
+CountedBtree::~CountedBtree() {
+    std::list<NodeForCBT *> toDelete;
+    std::list<NodeForCBT *> toFindChild;
+    while (!toFindChild.empty()) {
+        NodeForCBT * ele = toFindChild.front();
+        toFindChild.pop_front();
+        if (ele->IsLeaf) {
+            delete ele;
+        } else {
+            for (int i = 0; i < ele->NumOfKeys; ++i) {
+                toFindChild.push_back(ele->Pointers[i]);
+            }
+            toDelete.push_back(ele);
+        }
+    }
+    while (!toDelete.empty()) {
+        NodeForCBT * ele = toDelete.front();
+        toDelete.pop_front();
+        delete ele;
+    }
+}
+
+
 void CountedBtree::Insert(int rowID, int pos) {
     NumKeys++;
     if (Root == nullptr) {

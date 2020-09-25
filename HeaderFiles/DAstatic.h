@@ -44,7 +44,7 @@ public:
         Root->IsLeaf = true;
     }
 
-    ~DAstatic() { delete Root; }
+    ~DAstatic();
 
     int *RangeQuery(int, int, int *) const;
 

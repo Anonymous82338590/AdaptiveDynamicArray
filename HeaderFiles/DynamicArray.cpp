@@ -63,7 +63,7 @@ DynamicArray::~DynamicArray() {
     }
 }
 
-void DynamicArray::PrintTree() {
+void DynamicArray::PrintTree() const {
     printf("\n");
     std::list<NodeDA *> lst;
     int i = 0, rank = 0, newRank = 0;
@@ -123,7 +123,17 @@ void DynamicArray::PrintDA() {
     printf("\n");
 }
 
-int DynamicArray::pathToRoot(NodeDA * child) {
+void DynamicArray::PrintArray() {
+    int num;
+    int * ans = RangeQuery(1, NumItems, &num);
+    printf("[");
+    for (int i = 0; i < num; ++i) {
+        printf("%d ", ans[i]);
+    }
+    printf("]\n");
+}
+
+int DynamicArray::pathToRoot(NodeDA * child) const {
     int length = 0;
     NodeDA * c = child;
     while (c != Root) {
@@ -193,198 +203,145 @@ void DynamicArray::Insert(int newID, int pos) {
         leaf->Keys[preIndexInLeaf]++;
         SimplyAdjustAncestorKeysBy(leaf, 1);
         return;
-    } else { // have 2 arrays
-        int rightlen = newL - preIndexInArray - 1 - Min;
-        int leftlen = preIndexInArray + 1;
-        if (rightlen <= 0) {
-            int * righta = new int[Capacity];
-            rightlen = Min;
-            leftlen = newL - rightlen;
-            int k = 0;
-            int p = leftlen;
-            for (; p <= preIndexInArray ; ++p) {
-                righta[k] = olda[p];
-                k++;
+    }
+    int rightlen = newL - preIndexInArray - 1 - Min;
+    int leftlen = preIndexInArray + 1;
+    if (rightlen >= Capacity && leftlen >= Capacity) { //split and add, result in three arrays
+        int midlen = Min;
+        int *mida = new int[Capacity];
+        mida[0] = newID;
+        for (int i = 1; i < Min; ++i) {
+            mida[i] = olda[i + preIndexInArray];
+        }
+        int rightstartidx = newL - rightlen - 1;
+        int *righta = &olda[rightstartidx];
+        leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
+        leaf->Keys[preIndexInLeaf] = leftlen;
+        int a[2] = {midlen, rightlen};
+        int *b[2] = {mida, righta};
+        insertKeysIntoLeaf(a, reinterpret_cast<NodeDA **>(b), 2, leaf, preIndexInLeaf + 1);
+        return;
+    }
+    // only add one array
+    if (leftlen <= newL / 2) { //add to the left side
+        int * lefta = new int[Capacity];
+        if (leftlen < Min) { // newID is in the newly created subarray
+            int i = 0;
+            for ( ; i < leftlen; i++) {
+                lefta[i] = olda[i];
             }
-            righta[k] = newID;
-            k++;
-            for (; p < oldL; ++p) {
-                righta[k] = olda[p];
-                k++;
+            lefta[i] = newID;
+            i++;
+            for ( ; i < Min; i++) {
+                lefta[i] = olda[i-1];
             }
-            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
-            leaf->Keys[preIndexInLeaf] = leftlen;
-            if (leaf->NumOfKeys + 1 <= Capacity) {
-                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf + 1);
+            rightlen = newL - Min;
+            int * righta;
+            if (rightlen < Capacity) { // need to shift
+                int shift = Capacity - rightlen;
+                int rightstartidx = Min - 1;
+                for (int j = rightstartidx; j < oldL; ++j) {
+                    olda[j-shift] = olda[j];
+                }
+                righta = &olda[rightstartidx - shift];
+            } else { // no need of shifting
+                righta = &olda[Min - 1];
+            }
+            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(lefta);
+            leaf->Keys[preIndexInLeaf] = Min;
+            if (leaf->NumOfKeys+1 <= Capacity) {
+                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
+            }
+            return;
+        } else { // newID is in the original subarray
+            int i = 0;
+            for ( ; i < Min; ++i) {
+                lefta[i] = olda[i];
+            }
+            rightlen = newL - Min;
+            int * righta;
+            if (rightlen >= Capacity) { // need to shift
+                for (int j = Min - 1; j < preIndexInArray; ++j) {
+                    olda[j] = olda[j+1];
+                }
+                olda[preIndexInArray] = newID;
+                int rightstartidx = Min - 1;
+                righta = &olda[rightstartidx];
+            } else { // no need of shifting
+                int shift = Capacity - rightlen;
+                int k = oldL - Capacity;
+                int j = Min;
+                for ( ; j < preIndexInArray; ++j) {
+                    olda[k] = olda[j];
+                    k++;
+                }
+                olda[k] = newID;
+                k++;
+                for ( ; j < oldL; ++j) {
+                    olda[k] = olda[j];
+                    k++;
+                }
+                int rightstartidx = oldL - Capacity;
+                righta = &olda[rightstartidx];
+            }
+            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(lefta);
+            leaf->Keys[preIndexInLeaf] = Min;
+            if (leaf->NumOfKeys+1 <= Capacity) {
+                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
             } else {
                 insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
             }
             return;
         }
-        if (rightlen >= Capacity || leftlen >= Capacity) {
-            if (rightlen >= Capacity && leftlen >= Capacity) {
-                int midlen = Min;
-                int * mida = new int[Capacity];
-                mida[0] = newID;
-                for (int i = 1; i < Min; ++i) {
-                    mida[i] = olda[i + preIndexInArray];
-                }
-                int rightstartidx = newL - rightlen - 1;
-                int * righta = &olda[rightstartidx];
-                leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
-                leaf->Keys[preIndexInLeaf] = leftlen;
-                int a[2] = {midlen, rightlen};
-                int * b[2] = {mida, righta};
-                insertKeysIntoLeaf(a, reinterpret_cast<NodeDA **>(b), 2, leaf, preIndexInLeaf + 1);
-                return;
-            } else if (rightlen >= Capacity && leftlen >= Min) {
-                int midlen = Min;
-                int * mida = new int[Capacity];
-                mida[0] = newID;
-                for (int i = 1; i < Min; i++) {
-                    mida[i] = olda[i+preIndexInArray];
-                }
-                int * lefta = new int[Capacity];
-                for (int i = 0; i < leftlen; i++) {
-                    lefta[i] = olda[i];
-                }
-                int rightstartidx = newL - rightlen - 1;
-                int * righta = &olda[rightstartidx];
-                leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(lefta);
-                leaf->Keys[preIndexInLeaf] = leftlen;
-                int a[2] = {midlen, rightlen};
-                int* b[2] = {mida, righta};
-                insertKeysIntoLeaf(a, reinterpret_cast<NodeDA **>(b), 2, leaf, preIndexInLeaf + 1);
-                return;
-            } else if (rightlen >= Capacity && leftlen < Min) {
-                int midlen = Min;
-                int * mida = new int[Capacity];
-                int k = 0;
-                for (; k < leftlen; k++) {
-                    mida[k] = olda[k];
-                }
-                mida[k] = newID;
-                k++;
-                for (; k < Min; k++) {
-                    mida[k] = olda[k-1];
-                }
-                rightlen = newL - Min;
-                int rightstartidx = Min - 1;
-                int* righta = &olda[rightstartidx];
-                leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(mida);
-                leaf->Keys[preIndexInLeaf] = midlen;
-                if (leaf->NumOfKeys+1 <= Capacity) {
-                    insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
-                } else {
-                    insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
-                }
-                return;
-            } else if (leftlen >= Capacity && rightlen >= Min) {
-                int midlen = Min;
-                int * mida = new int[Capacity];
-                mida[0] = newID;
-                for (int i = 1; i < Min; i++) {
-                    mida[i] = olda[i + preIndexInArray];
-                }
-                int rightstartidx = newL - rightlen - 1;
-                int * righta = new int[Capacity];
-                for (int i = 0; i < rightlen; i++) {
-                    righta[i] = olda[i+rightstartidx];
-                }
-                leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
-                leaf->Keys[preIndexInLeaf] = leftlen;
-                int a[2] = {midlen, rightlen};
-                int* b[2] = {mida, righta};
-                insertKeysIntoLeaf(a, reinterpret_cast<NodeDA **>(b), 2, leaf, preIndexInLeaf + 1);
-                return;
-            } else if (leftlen >= Capacity && rightlen < Min) {
-                int midlen = rightlen + Min;
-                int * mida = new int[Capacity];
-                mida[0] = newID;
-                for (int i = 1; i < midlen; i++) {
-                    mida[i] = olda[i + preIndexInArray];
-                }
-                leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
-                leaf->Keys[preIndexInLeaf] = leftlen;
-                if (leaf->NumOfKeys+1 <= Capacity) {
-                    insertOneIntoLeaf(leaf, mida, midlen, preIndexInLeaf+1);
-                } else {
-                    insertOneIntoLeafAfterSplitting(leaf, mida, midlen, preIndexInLeaf+1);
-                }
-                return;
+    } else { // add to the right side
+        rightlen = newL - (preIndexInArray + 1);
+        if (rightlen <= Min) { // newID is in the newly created subarray
+            int * righta = new int[Capacity];
+            leftlen = newL - Min;
+            int j = leftlen, i = 0;
+            for ( ; j <= preIndexInArray; ++j) {
+                righta[i] = olda[j];
+                i++;
             }
-        } else { //rightlen < capacity && leftlen < capacity -> rightlen >= Min && leftlen >= Min
-            if (rightlen >= Min && leftlen >= Min) { // newL >= 3 * Min can have three
-                int midlen = Min;
-                int * mida = new int[Capacity];
-                mida[0] = newID;
-                for (int i = 1; i < midlen; i ++) {
-                    mida[i] = olda[i+preIndexInArray];
-                }
-                leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
-                leaf->Keys[preIndexInLeaf] = leftlen;
-                int * righta = new int[Capacity];
-                int rightstartidx = newL-rightlen-1;
-                for (int k = 0; k < rightlen; k ++) {
-                    righta[k] = olda[rightstartidx+k];
-                }
-                int a[2] = {midlen, rightlen};
-                int* b[2] = {mida, righta};
-                insertKeysIntoLeaf(a, reinterpret_cast<NodeDA **>(b), 2, leaf, preIndexInLeaf + 1 );
-                return;
+            righta[i] = newID;
+            i++;
+            for ( ; i < Min; ++i) {
+                righta[i] = olda[j];
+                j++;
+            }
+            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
+            leaf->Keys[preIndexInLeaf] = leftlen;
+            rightlen = Min;
+            if (leaf->NumOfKeys+1 <= Capacity) {
+                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
             } else {
-                if (preIndexInArray + 1 < newL / 2) {
-                    leftlen = newL/2;
-                    rightlen = newL-leftlen;
-                    int * lefta = new int[Capacity];
-                    int k = 0;
-                    for (; k <= preIndexInArray; k ++) {
-                        lefta[k] = olda[k];
-                    }
-                    lefta[k] = newID;
-                    k++;
-                    for (; k < leftlen ; k ++) {
-                        lefta[k] = olda[k-1];
-                    }
-                    int rightstartidx = leftlen-1;
-                    leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(lefta);
-                    leaf->Keys[preIndexInLeaf] = leftlen;
-                    for (int i = 0; i < rightlen; i ++) {
-                        olda[i] = olda[i+rightstartidx];
-                    }
-                    int * righta = olda;
-                    if (leaf->NumOfKeys+1 <= Capacity) {
-                        insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
-                    } else {
-                        insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
-                    }
-                    return;
-                } else {
-                    leftlen = newL/2;
-                    rightlen = newL-leftlen;
-                    int * righta = new int[Capacity];
-                    int k = leftlen;
-                    int ri = 0;
-                    for (; k <= preIndexInArray; k ++) {
-                        righta[ri] = olda[k];
-                        ri++;
-                    }
-                    righta[ri] = newID;
-                    ri++;
-                    for ( ; k < oldL ; k ++) {
-                        righta[ri] = olda[k];
-                        ri++;
-                    }
-                    leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
-                    leaf->Keys[preIndexInLeaf] = leftlen;
-                    if (leaf->NumOfKeys+1 <= Capacity) {
-                        insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
-                    } else {
-                        insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
-                    }
-                    return;
-                }
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
             }
+            return;
+        } else { // newID is in the original subarray
+            int * righta = new int[Capacity];
+            leftlen = newL - Min;
+            int j = oldL - 1;
+            for (int i = Min - 1; i >= 0; --i) {
+                righta[i] = olda[j];
+                j--;
+            }
+            j++;
+            for ( ; j >= preIndexInArray + 2; --j) {
+                olda[j] = olda[j-1];
+            }
+            olda[preIndexInArray+1] = newID;
+            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
+            leaf->Keys[preIndexInLeaf] = leftlen;
+            rightlen = Min;
+            if (leaf->NumOfKeys+1 <= Capacity) {
+                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
+            }
+            return;
         }
     }
 }
@@ -1819,6 +1776,9 @@ void DynamicArray::MergeRedistributeArrayAfterSwap(NodeDA * leaf, int IndexInLea
     if (IndexInLeaf == 0) { // can only adjust with right array
         int leftl = leaf->Keys[0];
         int rightl = leaf->Keys[1];
+        if (rightl == 0) {
+            return;
+        }
         if (rightl + leftl <= Capacity) { // merge
             int * lefta = reinterpret_cast<int *>(leaf->Pointers[0]);
             int * righta = reinterpret_cast<int *>(leaf->Pointers[1]);
@@ -1863,6 +1823,9 @@ void DynamicArray::MergeRedistributeArrayAfterSwap(NodeDA * leaf, int IndexInLea
     } else { // with left neighbour
         int leftl = leaf->Keys[IndexInLeaf-1];
         int rightl = leaf->Keys[IndexInLeaf];
+        if (leftl == 0) {
+            return;
+        }
         if (leftl + rightl <= Capacity) { // merge
             int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf - 1]);
             int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
