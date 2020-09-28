@@ -265,8 +265,8 @@ int main() {
         con->setSchema("end2end");
 
 
-        sql::PreparedStatement* pstmtInsert = con->prepareStatement("INSERT INTO prefetching4 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        sql::PreparedStatement* pstmtDelete = con->prepareStatement("DELETE FROM prefetching4 WHERE ID = ?");
+        sql::PreparedStatement* pstmtInsert = con->prepareStatement("INSERT INTO prefetching VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        sql::PreparedStatement* pstmtDelete = con->prepareStatement("DELETE FROM prefetching WHERE ID = ?");
 
         string queryString = "SELECT * FROM prefetching4 WHERE ID in (?";
         for (int l = 1; l < 5*prewindow; ++l) {
@@ -287,7 +287,7 @@ int main() {
         printf("size of SqlConVector = %lu\n", SqlConVector.size());
 
         //var time1, time2 time.Time
-        string filepath[3] = {"prefetching4.csv", "prefetching4Log.txt"};
+        string filepath[3] = {"prefetching.csv", "prefetchingLog.txt"};
         ofstream finstant, flog, ffinal;
         finstant.open(filepath[0], ios::out | ios::in | ios::trunc);
         flog.open(filepath[1], ios::out | ios::in | ios::trunc);

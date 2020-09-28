@@ -211,8 +211,8 @@ int main() {
             sqlconn->sqlconnection = driver->connect("tcp://127.0.0.1:3306", "root", "greeN7^Tr33");
             /* Connect to the MySQL test database */
             sqlconn->sqlconnection->setSchema("end2end");
-            sqlconn->pstmtInsert = sqlconn->sqlconnection->prepareStatement("INSERT INTO asyn6 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            sqlconn->pstmtDelete = sqlconn->sqlconnection->prepareStatement("DELETE FROM asyn6 WHERE ID = ?");
+            sqlconn->pstmtInsert = sqlconn->sqlconnection->prepareStatement("INSERT INTO asyn VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            sqlconn->pstmtDelete = sqlconn->sqlconnection->prepareStatement("DELETE FROM asyn WHERE ID = ?");
             SqlConVector.push_back(sqlconn);
             auto * ai = new atomic_flag; (*ai).clear();
             SqlConAvaliable.push_back(ai);
@@ -220,7 +220,7 @@ int main() {
         printf("size of SqlConVector = %lu\n", SqlConVector.size());
 
         //var time1, time2 time.Time
-        string filepath[3] = {"asyn6.csv", "asyn6Log.txt"};
+        string filepath[3] = {"asyn.csv", "asynLog.txt"};
         ofstream finstant, flog, ffinal;
         finstant.open(filepath[0], ios::out | ios::in | ios::trunc);
         flog.open(filepath[1], ios::out | ios::in | ios::trunc);
