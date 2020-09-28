@@ -1,6 +1,5 @@
 /*
- * operations = 100,000
- * sleep for 500-1000ms
+ * 100,000 operations, sleep for 500ms after each scrolling
  */
 #include <iostream>
 #include <fstream>
@@ -104,12 +103,12 @@ sql::ResultSet *res1;
 const int iniNum = 100000; //0.03 = 30000
 const int prewindow = 30;
 const int danodesize = 50;
-const int operations = 10000;
+const int operations = 100000;
 vector<SQLCONN*> SqlConVector;
 vector<atomic_flag*> SqlConAvaliable;
 atomic_int numSqlCons;
 atomic_flag available0, available1;
-
+int TqueryIdx = 0;
 
 class MysqlRow {
 public:
@@ -164,8 +163,10 @@ void FetchSqlRes1(MysqlRow * rows) {
 
 long long Tdb = 0;
 long long Thisdb = 0;
+long long TqueryDB[operations+1000], Tquery[operations+1000];
 
-void QueryDB0(MysqlRow * rows0, int * IDs, int num) {
+
+void QueryDB0(MysqlRow * rows0, int * IDs, int num, int queryindex, int threadIdx) {
     TimeVar timea = timeNow();
     SQLCONN * sqlconn;
     bool find = false;
@@ -193,11 +194,13 @@ void QueryDB0(MysqlRow * rows0, int * IDs, int num) {
     available0.test_and_set();
     TimeVar timeb = timeNow();
     Thisdb = duration(timeb - timea);
-    Tdb += Thisdb;
+    if (queryindex >= 0) {
+        TqueryDB[queryindex] += Thisdb;
+    }
     (*(SqlConAvaliable[i])).clear();
 }
 
-void QueryDB1(MysqlRow * rows1, int * IDs, int num) {
+void QueryDB1(MysqlRow * rows1, int * IDs, int num, int queryindex, int threadIdx) {
     TimeVar timea = timeNow();
     SQLCONN * sqlconn;
     bool find = false;
@@ -225,7 +228,9 @@ void QueryDB1(MysqlRow * rows1, int * IDs, int num) {
     available1.test_and_set();
     TimeVar timeb = timeNow();
     Thisdb = duration(timeb - timea);
-    Tdb += Thisdb;
+    if (queryindex >= 0) {
+        TqueryDB[queryindex] += Thisdb;
+    }
     (*(SqlConAvaliable[i])).clear();
 }
 
@@ -251,7 +256,7 @@ int main() {
     try {
         vector<thread> threads;
         numSqlCons.operator=(100);
-        //int threadIdx = 1;
+        int threadIdx = 1;
 
         /* Create a connection */
         driver = get_driver_instance();
@@ -260,10 +265,10 @@ int main() {
         con->setSchema("end2end");
 
 
-        sql::PreparedStatement* pstmtInsert = con->prepareStatement("INSERT INTO prefetching VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        sql::PreparedStatement* pstmtDelete = con->prepareStatement("DELETE FROM prefetching WHERE ID = ?");
+        sql::PreparedStatement* pstmtInsert = con->prepareStatement("INSERT INTO prefetching4 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        sql::PreparedStatement* pstmtDelete = con->prepareStatement("DELETE FROM prefetching4 WHERE ID = ?");
 
-        string queryString = "SELECT * FROM prefetching WHERE ID in (?";
+        string queryString = "SELECT * FROM prefetching4 WHERE ID in (?";
         for (int l = 1; l < 5*prewindow; ++l) {
             queryString += ", ?";
         }
@@ -282,7 +287,7 @@ int main() {
         printf("size of SqlConVector = %lu\n", SqlConVector.size());
 
         //var time1, time2 time.Time
-        string filepath[3] = {"prefetching.csv", "prefetchingLog.txt"};
+        string filepath[3] = {"prefetching4.csv", "prefetching4Log.txt"};
         ofstream finstant, flog, ffinal;
         finstant.open(filepath[0], ios::out | ios::in | ios::trunc);
         flog.open(filepath[1], ios::out | ios::in | ios::trunc);
@@ -461,7 +466,6 @@ int main() {
                 available0.clear();
                 available1.clear();
 
-
                 int pos = NowTotalNum/2;
                 int winstart = pos - 14, winend = pos + 15;
                 int bufferstart = winstart - 2*prewindow;
@@ -469,8 +473,9 @@ int main() {
                 int num = 0;
                 int* IDs = da->RangeQuery(bufferstart, bufferend, &num);
 
-                thread th(QueryDB1, rows1, IDs, num);
+                thread th(QueryDB1, rows1, IDs, num, -1, threadIdx);
                 th.join();
+                threadIdx++;
                 //printf("finish ini fetching\n");
 
                 long long Tda = 0;
@@ -533,39 +538,47 @@ int main() {
 
                     if (ready) {
                         if (numPre % 2 == 0) {
-                            threads.emplace_back(QueryDB0, rows0, IDs, num);
+                            threads.emplace_back(QueryDB0, rows0, IDs, num, TqueryIdx, threadIdx);
+                            threadIdx++;
                         } else {
-                            threads.emplace_back(QueryDB1, rows1, IDs, num);
+                            threads.emplace_back(QueryDB1, rows1, IDs, num, TqueryIdx, threadIdx);
+                            threadIdx++;
                         }
-                        simulateUserResponseTime();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
                     } else {
                         if (numPre % 2 == 0) {
                             time1 = timeNow();
-                            thread th0(QueryDB0, rows0, IDs, num);
+                            thread th0(QueryDB0, rows0, IDs, num, -1, threadIdx);
                             th0.join();
+                            threadIdx++;
                             time2 = timeNow();
                             Tda += duration(time2-time1);
                         } else {
                             time1 = timeNow();
-                            thread th1(QueryDB1, rows1, IDs, num);
+                            thread th1(QueryDB1, rows1, IDs, num, -1, threadIdx);
                             th1.join();
+                            threadIdx++;
                             time2 = timeNow();
                             Tda += duration(time2-time1);
                         }
                     }
 
                 }
+                Tquery[TqueryIdx] += Tda;
+
                 double fl = (lt+1)*1.0/operations ;
                 finstant << fl << ",";
                 cout << fl << ",";
 
                 finstant <<Tda/10 << ","<< (Tda + Tdb)/10 <<endl;
                 cout <<Tda/10 << ","<< (Tda + Tdb)/10 <<endl;
+
+                TqueryIdx++;
             }
 
         } //for lt <= loopTime
-
-        printf("finish lt loop, threads size = %lu\n", threads.size());
+        printf("finish lt loop, threads size = %lu\n\n", threads.size());
+        finstant<<endl<<endl;
         int joinNum = 1;
         vector<thread>::iterator it;
         for (it = threads.begin(); it != threads.end(); ++it) {
@@ -574,6 +587,19 @@ int main() {
             //printf("after joining th %d\n", joinNum);
             joinNum++;
         }
+        int idx = 0;
+        for (int lt = 0; lt < TotalActions; lt++) {
+            if ((lt + 1 <= 10) || ((lt + 1 <= 100) && ((lt + 1) % 10 == 0)) ||
+                ((lt + 1 <= 1000) && ((lt + 1) % 100 == 0))
+                || ((lt + 1 <= 10000) && ((lt + 1) % 1000 == 0)) || ((lt + 1 <= 100000) && ((lt + 1) % 10000 == 0))
+                || ((lt + 1 <= 1000000) && ((lt + 1) % 100000 == 0))) {
+                double fl = (lt + 1) * 1.0 / operations;
+                finstant << fl << "," << Tquery[idx]/10 << "," << TqueryDB[idx]/10 << endl;
+                cout << fl << "," << Tquery[idx]/10 << "," << TqueryDB[idx]/10 << endl;
+                idx += 10;
+            }
+        }
+
         flog.close();
         finstant.close();
     } catch (sql::SQLException &e) {
