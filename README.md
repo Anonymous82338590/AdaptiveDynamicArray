@@ -27,7 +27,7 @@ This repository contains all the algorithms and texting files in our experiments
 
 ### Requirements
 - g++ 
-- MySQL Connector/C++ is needed for framework validation. Installation guide can be found [here](https://dev.mysql.com/doc/connector-cpp/8.0/en/connector-cpp-downloading.html).
+- MySQL database, python and MySQL Connector/C++ are needed for framework validation. Installation guide of MySQL Connector/C++ can be found [here](https://dev.mysql.com/doc/connector-cpp/8.0/en/connector-cpp-downloading.html).
 
 ### How to build
 Every single program is put into a separate folder with a Makefile and run.sh.

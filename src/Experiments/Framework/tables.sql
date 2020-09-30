@@ -1,3 +1,5 @@
+-- This sql file creates two tables: asyn and prefetching
+
 show databases;
 use end2end;
 
