@@ -13,7 +13,7 @@
 #include <atomic>
 #include "../../../HeaderFiles/CountedBtree.h"
 #include "../../../HeaderFiles/StandardArray.h"
-#include "../../../HeaderFiles/DynamicArray.h"
+#include "../../../HeaderFiles/AdaptiveDynamicArray.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
