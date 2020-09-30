@@ -4,7 +4,7 @@
 #include <random>
 #include <algorithm>
 #include "../../../HeaderFiles/StandardArray.h"
-#include "../../../HeaderFiles/DynamicArray.h"
+#include "../../../HeaderFiles/AdaptiveDynamicArray.h"
 #include "../../../HeaderFiles/tiered-vector.h"
 #include "../../../HeaderFiles/LinkedList.h"
 using namespace std;
