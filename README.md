@@ -36,5 +36,5 @@ Please go to the directory and use the following commands to build and run.
 make
 bash run.sh
  ```
-For example, go to directory src/Experiments/Ablation/1M/delete, use 'make' to get the executable file and then 'bash run.sh' to run it.
-Final results are recorded in 'avg.csv': average response time after running 'delete.cpp' for 10 times.
+For example, go to directory `src/Experiments/Ablation/10K/delete`, use `make` to get the executable file and then `bash run.sh` to run it.
+Final results are recorded in `avg.csv`: average response time after running `delete.cpp` for 10 times.
