@@ -1,33 +1,45 @@
-#include "DAstatic.h"
+#include "AdaptiveDynamicArray.h"
 
-NodeForStree::NodeForStree(int capacity, int numkeys, NodeForStree * parent) {
+NodeDA::NodeDA(int capacity, int numkeys, NodeDA * parent) {
     NumOfKeys = numkeys;
     Parent = parent;
-    Pointers = new NodeForStree*[capacity];
+    Pointers = new NodeDA * [capacity];
     Keys = new int[capacity];
     Next = nullptr;
     //Previous = nullptr;
     IsLeaf = false;
 }
 
-DAstatic * NewStree(int * array, int numItems, int degree ){
-    DAstatic * da =new DAstatic(0, degree);
+NodeDA::~NodeDA() {
+    delete []Pointers;
+    delete []Keys;
+}
+
+DynamicArray * NewDynamicArray(int * & array, int numItems, int degree ){
+    DynamicArray * da =new DynamicArray(0, degree);
     if (array == nullptr) {
         da->Root = nullptr;
         return da;
     }
+    da->Root = new NodeDA(da->Capacity);
+    da->NumItems = numItems;
+    int *newa = new int[numItems];
     for (int i = 0; i < numItems; ++i) {
-        da->Insert(array[i], i+1);
+        newa[i] = array[i];
     }
+    da->Root->IsLeaf = true;
+    da->Root->Keys[0] = numItems;
+    da->Root->NumOfKeys = 1;
+    da->Root->Pointers[0] = reinterpret_cast<NodeDA *>(newa);
     return da;
 }
 
-DAstatic::~DAstatic() {
-    std::list<NodeForStree *> toDelete;
-    std::list<NodeForStree *> toFindChild;
+DynamicArray::~DynamicArray() {
+    std::list<NodeDA *> toDelete;
+    std::list<NodeDA *> toFindChild;
     toFindChild.push_back(Root);
     while (!toFindChild.empty()) {
-        NodeForStree * ele = toFindChild.front();
+        NodeDA * ele = toFindChild.front();
         if (ele != nullptr) {
             toFindChild.pop_front();
             if (ele->IsLeaf) {
@@ -45,15 +57,15 @@ DAstatic::~DAstatic() {
         }
     }
     while (!toDelete.empty()) {
-        NodeForStree * ele = toDelete.front();
+        NodeDA * ele = toDelete.front();
         toDelete.pop_front();
         delete ele;
     }
 }
 
-void DAstatic::PrintTree() const {
+void DynamicArray::PrintTree() const {
     printf("\n");
-    std::list<NodeForStree *> lst;
+    std::list<NodeDA *> lst;
     int i = 0, rank = 0, newRank = 0;
     if (Root == nullptr) {
         printf("Empty Tree\n");
@@ -61,7 +73,7 @@ void DAstatic::PrintTree() const {
     }
     lst.push_back(Root);
     while (!lst.empty()) {
-        NodeForStree * ele = lst.front();
+        NodeDA * ele = lst.front();
         if (ele != nullptr) {
             lst.pop_front();
             if (ele->Parent != nullptr) {
@@ -80,7 +92,7 @@ void DAstatic::PrintTree() const {
             if (!ele->IsLeaf) {
                 for (i = 0; i < ele->NumOfKeys; ++i) {
                     if (ele->Keys[i] != 0) {
-                        NodeForStree * c = ele->Pointers[i];
+                        NodeDA * c = ele->Pointers[i];
                         lst.push_back(c);
                     }
                 }
@@ -91,9 +103,39 @@ void DAstatic::PrintTree() const {
     printf("\n");
 }
 
-int DAstatic::pathToRoot(NodeForStree * child) const {
+void DynamicArray::PrintDA() {
+    PrintTree();
+    int preIndexInLeaf, preIndexInArray;
+    NodeDA * leaf = findLeaf(1, &preIndexInLeaf, &preIndexInArray);
+    while (leaf != nullptr) {
+        int NumKeysInLeaf = leaf->NumOfKeys;
+        for (int i = 0; i < NumKeysInLeaf; ++i) {
+            int len = leaf->Keys[i];
+            printf("[");
+            int * s = reinterpret_cast<int *>(leaf->Pointers[i]);
+            for (int j = 0; j < len; ++j) {
+                printf("%d ", s[j]);
+            }
+            printf("]\n");
+        }
+        leaf = leaf->Next;
+    }
+    printf("\n");
+}
+
+void DynamicArray::PrintArray() {
+    int num;
+    int * ans = RangeQuery(1, NumItems, &num);
+    printf("[");
+    for (int i = 0; i < num; ++i) {
+        printf("%d ", ans[i]);
+    }
+    printf("]\n");
+}
+
+int DynamicArray::pathToRoot(NodeDA * child) const {
     int length = 0;
-    NodeForStree * c = child;
+    NodeDA * c = child;
     while (c != Root) {
         c = c->Parent;
         length ++;
@@ -102,55 +144,218 @@ int DAstatic::pathToRoot(NodeForStree * child) const {
 }
 
 //make a leaf with capacity
-NodeForStree * makeLeafForStree(int capacity) {
-    NodeForStree * n = new NodeForStree(capacity);
+NodeDA * makeLeafonedp(int capacity) {
+    NodeDA * n = new NodeDA(capacity);
     n->IsLeaf = true;
     return n;
 }
 
-int DAstatic::Depth() {
+//depth of tree
+int DynamicArray::Depth() const {
     if (Root == nullptr) {
         return 0;
     }
-    int ans = 0;
-    NodeForStree * c = Root;
+    int ans = 1;
+    NodeDA * c = Root;
     while (!c->IsLeaf) {
         ans ++;
         c = c->Pointers[0];
     }
-    ans++;
     return ans;
 }
 
-//okstree
-void DAstatic::Insert(int newID, int pos) {
+void DynamicArray::Insert(int newID, int pos) {
     NumItems ++;
     if (pos > NumItems + 1) {
         pos = NumItems + 1;
     }
     if (Root == nullptr) {
-        Root = makeLeafForStree(Capacity);
-        Root->Keys[0] = newID;
+        Root = makeLeafonedp(Capacity);
+        Root->Keys[0] = 1;
+        int * newa = new int[Capacity];
+        newa[0] = newID;
+        Root->Pointers[0] = reinterpret_cast<NodeDA *>(newa);
+        Root->Parent = nullptr;
+        Root->Next = nullptr;
+       // Root->Previous = nullptr;
         Root->NumOfKeys = 1;
         return;
     }
-    NodeForStree * leaf;
-    int preIndexInLeaf;
-    leaf = findLeaf(pos-1, &preIndexInLeaf);
-    if (leaf->NumOfKeys < Capacity) {
-        insertOneIntoLeaf(leaf, newID, preIndexInLeaf+1);
-    } else {
-        insertOneIntoLeafAfterSplitting(leaf, newID, preIndexInLeaf+1);
+    NodeDA * leaf;
+    int preIndexInLeaf, preIndexInArray;
+    leaf = findLeaf(pos-1, &preIndexInLeaf, &preIndexInArray);
+    if (preIndexInLeaf == -1) { // insert into the starting position
+        int * olda = reinterpret_cast<int *>(leaf->Pointers[0]);
+        int tmp = olda[0];
+        olda[0] = newID;
+        newID = tmp;
+        preIndexInArray = 0;
+        preIndexInLeaf = 0;
+    }
+    int oldL = leaf->Keys[preIndexInLeaf];
+    int newL = leaf->Keys[preIndexInLeaf] + 1;
+    int * olda = reinterpret_cast<int *>(leaf->Pointers[preIndexInLeaf]);
+    if (oldL < Capacity) { // have empty slots
+        for (int i = oldL; i > preIndexInArray ; --i) {
+            olda[i] = olda[i-1];
+        }
+        olda[preIndexInArray + 1] = newID;
+        leaf->Keys[preIndexInLeaf]++;
+        SimplyAdjustAncestorKeysBy(leaf, 1);
+        return;
+    }
+    int rightlen = newL - preIndexInArray - 1 - Min;
+    int leftlen = preIndexInArray + 1;
+    if (rightlen >= Capacity && leftlen >= Capacity) { //split and add, result in three arrays
+        int midlen = Min;
+        int *mida = new int[Capacity];
+        mida[0] = newID;
+        for (int i = 1; i < Min; ++i) {
+            mida[i] = olda[i + preIndexInArray];
+        }
+        int rightstartidx = newL - rightlen - 1;
+        int *righta = &olda[rightstartidx];
+        leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
+        leaf->Keys[preIndexInLeaf] = leftlen;
+        int a[2] = {midlen, rightlen};
+        int *b[2] = {mida, righta};
+        insertKeysIntoLeaf(a, reinterpret_cast<NodeDA **>(b), 2, leaf, preIndexInLeaf + 1);
+        return;
+    }
+    // only add one array
+    if (leftlen <= newL / 2) { //add to the left side
+        int * lefta = new int[Capacity];
+        if (leftlen < Min) { // newID is in the newly created subarray
+            int i = 0;
+            for ( ; i < leftlen; i++) {
+                lefta[i] = olda[i];
+            }
+            lefta[i] = newID;
+            i++;
+            for ( ; i < Min; i++) {
+                lefta[i] = olda[i-1];
+            }
+            rightlen = newL - Min;
+            int * righta;
+            if (rightlen < Capacity) { // need to shift
+                int shift = Capacity - rightlen;
+                int rightstartidx = Min - 1;
+                for (int j = rightstartidx; j < oldL; ++j) {
+                    olda[j-shift] = olda[j];
+                }
+                righta = &olda[rightstartidx - shift];
+            } else { // no need of shifting
+                righta = &olda[Min - 1];
+            }
+            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(lefta);
+            leaf->Keys[preIndexInLeaf] = Min;
+            if (leaf->NumOfKeys+1 <= Capacity) {
+                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
+            }
+            return;
+        } else { // newID is in the original subarray
+            int i = 0;
+            for ( ; i < Min; ++i) {
+                lefta[i] = olda[i];
+            }
+            rightlen = newL - Min;
+            int * righta;
+            if (rightlen >= Capacity) { // need to shift
+                for (int j = Min - 1; j < preIndexInArray; ++j) {
+                    olda[j] = olda[j+1];
+                }
+                olda[preIndexInArray] = newID;
+                int rightstartidx = Min - 1;
+                righta = &olda[rightstartidx];
+            } else { // no need of shifting
+                int shift = Capacity - rightlen;
+                int k = oldL - Capacity;
+                int j = Min;
+                for ( ; j < preIndexInArray; ++j) {
+                    olda[k] = olda[j];
+                    k++;
+                }
+                olda[k] = newID;
+                k++;
+                for ( ; j < oldL; ++j) {
+                    olda[k] = olda[j];
+                    k++;
+                }
+                int rightstartidx = oldL - Capacity;
+                righta = &olda[rightstartidx];
+            }
+            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(lefta);
+            leaf->Keys[preIndexInLeaf] = Min;
+            if (leaf->NumOfKeys+1 <= Capacity) {
+                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
+            }
+            return;
+        }
+    } else { // add to the right side
+        rightlen = newL - (preIndexInArray + 1);
+        if (rightlen <= Min) { // newID is in the newly created subarray
+            int * righta = new int[Capacity];
+            leftlen = newL - Min;
+            int j = leftlen, i = 0;
+            for ( ; j <= preIndexInArray; ++j) {
+                righta[i] = olda[j];
+                i++;
+            }
+            righta[i] = newID;
+            i++;
+            for ( ; i < Min; ++i) {
+                righta[i] = olda[j];
+                j++;
+            }
+            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
+            leaf->Keys[preIndexInLeaf] = leftlen;
+            rightlen = Min;
+            if (leaf->NumOfKeys+1 <= Capacity) {
+                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
+            }
+            return;
+        } else { // newID is in the original subarray
+            int * righta = new int[Capacity];
+            leftlen = newL - Min;
+            int j = oldL - 1;
+            for (int i = Min - 1; i >= 0; --i) {
+                righta[i] = olda[j];
+                j--;
+            }
+            j++;
+            for ( ; j >= preIndexInArray + 2; --j) {
+                olda[j] = olda[j-1];
+            }
+            olda[preIndexInArray+1] = newID;
+            leaf->Pointers[preIndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
+            leaf->Keys[preIndexInLeaf] = leftlen;
+            rightlen = Min;
+            if (leaf->NumOfKeys+1 <= Capacity) {
+                insertOneIntoLeaf(leaf, righta, rightlen, preIndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightlen, preIndexInLeaf+1);
+            }
+            return;
+        }
     }
 }
 
-void DAstatic::insertMulKeysIntoLeaf(int * keysToInsert, int numKeysToInsert, NodeForStree* toLeaf, int toIndex) {
+void DynamicArray::insertMulKeysIntoLeaf(int * keysToInsert, NodeDA ** pointersToInsert,
+                                         int numKeysToInsert, NodeDA * toLeaf, int toIndex) {
     int newNumKeys = numKeysToInsert + toLeaf->NumOfKeys;
     int startInsertedIdx = toIndex, endInsertedIdx = startInsertedIdx + numKeysToInsert - 1;
     for (int l = newNumKeys - 1; l > endInsertedIdx; --l) {
+        toLeaf->Pointers[l] = toLeaf->Pointers[l-numKeysToInsert];
         toLeaf->Keys[l] = toLeaf->Keys[l-numKeysToInsert];
     }
     for (int i = startInsertedIdx; i <= endInsertedIdx; ++i) {
+        toLeaf->Pointers[i] = pointersToInsert[i - startInsertedIdx];
         toLeaf->Keys[i] = keysToInsert[i-startInsertedIdx];
     }
     toLeaf->NumOfKeys += numKeysToInsert;
@@ -161,17 +366,22 @@ void DAstatic::insertMulKeysIntoLeaf(int * keysToInsert, int numKeysToInsert, No
 //note that in some cases, we inserting into beginning/end of a node, mostly happening in swap/move
 //when insert into the beginning, we need to make pointer toLeaf still point to the second leaf
 //return true if toIndex == 0
-bool DAstatic::insertMulKeysIntoLeafAfterOneSplitting(int * keysToInsert, int numKeysToInsert, NodeForStree* toLeaf, int toIndex) {
+bool DynamicArray::insertMulKeysIntoLeafAfterOneSplitting(int * keysToInsert, NodeDA ** pointersToInsert,
+                                                          int numKeysToInsert, NodeDA * toLeaf, int toIndex) {
     int numGoRight = toLeaf->NumOfKeys - toIndex;
     int * keysGoRight = new int[numGoRight];
+    NodeDA ** pointersGoRight = new NodeDA *[numGoRight];
     for (int i = 0; i < numGoRight; ++i) {
+        pointersGoRight[i] = toLeaf->Pointers[i + toIndex];
         keysGoRight[i] = toLeaf->Keys[i+toIndex];
     }
     int totalNum = toLeaf->NumOfKeys + numKeysToInsert;
     int leftNum = totalNum/2, rightNum = totalNum - leftNum;
+    int rightSumKeys = 0;
     int toInsertIdx = 0, goRightIdx = 0;
     int leftidx = toIndex, rightidx = 0;
     for (; leftidx < leftNum; ++leftidx) {
+        toLeaf->Pointers[leftidx] = pointersToInsert[toInsertIdx];
         toLeaf->Keys[leftidx] = keysToInsert[toInsertIdx];
         toInsertIdx++;
         if (toInsertIdx == numKeysToInsert) {
@@ -180,21 +390,27 @@ bool DAstatic::insertMulKeysIntoLeafAfterOneSplitting(int * keysToInsert, int nu
         }
     }
     for (; leftidx < leftNum; ++leftidx) {
+        toLeaf->Pointers[leftidx] = pointersGoRight[goRightIdx];
         toLeaf->Keys[leftidx] = keysGoRight[goRightIdx];
         goRightIdx++;
     }
-    NodeForStree * newLeaf = makeLeafForStree(Capacity);
+    NodeDA * newLeaf = makeLeafonedp(Capacity);
     for (int k = leftNum; k < toIndex; ++k) {
         newLeaf->Pointers[rightidx] = toLeaf->Pointers[k];
         newLeaf->Keys[rightidx] = toLeaf->Keys[k];
+        rightSumKeys += newLeaf->Keys[rightidx];
         rightidx++;
     }
     for (; toInsertIdx < numKeysToInsert; ++toInsertIdx) {
+        newLeaf->Pointers[rightidx] = pointersToInsert[toInsertIdx];
         newLeaf->Keys[rightidx] = keysToInsert[toInsertIdx];
+        rightSumKeys += newLeaf->Keys[rightidx];
         rightidx++;
     }
     for (; goRightIdx < numGoRight; ++goRightIdx) {
+        newLeaf->Pointers[rightidx] = pointersGoRight[goRightIdx];
         newLeaf->Keys[rightidx] = keysGoRight[goRightIdx];
+        rightSumKeys += newLeaf->Keys[rightidx];
         rightidx++;
     }
     toLeaf->NumOfKeys = leftNum;
@@ -208,31 +424,36 @@ bool DAstatic::insertMulKeysIntoLeafAfterOneSplitting(int * keysToInsert, int nu
      */
     toLeaf->Next = newLeaf;
     //newLeaf->Previous = toLeaf;
-    insertIntoParent(toLeaf, toLeaf->NumOfKeys, newLeaf, newLeaf->NumOfKeys);
+    int leftSumKeys = NodeSumKeys(toLeaf);
+    insertIntoParent(toLeaf, leftSumKeys, newLeaf, rightSumKeys);
     if (toIndex == 0) {
         return true;
     }
     return false;
 }
 
-//okstree
-void DAstatic::insertOneIntoLeaf(NodeForStree * leaf, int newID, int indexInLeaf) const {
-    int keyToStore = newID;
+void DynamicArray::insertOneIntoLeaf(NodeDA * leaf, int * newPointer, int length, int indexInLeaf) {
+    int * pointerToStore = newPointer;
+    int keyToStore = length;
     leaf->NumOfKeys ++;
     int tmpKey;
     int i = indexInLeaf;
     for (; i < leaf->NumOfKeys - 1; i++) {
         tmpKey = leaf->Keys[i];
+        int * tmpPointer = reinterpret_cast<int *>(leaf->Pointers[i]);
         leaf->Keys[i] = keyToStore;
+        leaf->Pointers[i] = reinterpret_cast<NodeDA *>(pointerToStore);
         keyToStore = tmpKey;
+        pointerToStore = tmpPointer;
     }
     leaf->Keys[i] = keyToStore;
+    leaf->Pointers[i] = reinterpret_cast<NodeDA *>(pointerToStore);
 
     if (leaf == Root) {
         return;
     }
-    NodeForStree * c = leaf;
-    NodeForStree * parent = c->Parent;
+    NodeDA * c = leaf;
+    NodeDA * parent = c->Parent;
     while (parent != nullptr) {
         for (int j = 0; j < parent->NumOfKeys; ++j) {
             if (parent->Pointers[j] == c) {
@@ -243,40 +464,59 @@ void DAstatic::insertOneIntoLeaf(NodeForStree * leaf, int newID, int indexInLeaf
             }
         }
     }
+    return;
 }
 
-//okstree
-void DAstatic::insertOneIntoLeafAfterSplitting(NodeForStree * leaf, int newID, int indexInLeaf, bool needGoupwards) {
-    NodeForStree * newLeaf;
-    int split=0, i=0;
-    newLeaf = makeLeafForStree(Capacity);
+
+void DynamicArray::insertOneIntoLeafAfterSplitting(NodeDA * leaf, int * newPointer, int length, int indexInLeaf, bool needGoupwards) {
+    NodeDA * newLeaf;
+    int split=0, i=0, LeafNumPointers=0, NewLeafNumPointers=0;
+    newLeaf = makeLeafonedp(Capacity);
     split = Min;
     leaf->NumOfKeys = split;
     newLeaf->NumOfKeys = Capacity + 1 - split;
-    if (indexInLeaf < split) {// new key is in leaf (old leaf)
+    if (indexInLeaf < split) {// new array is in leaf (old leaf)
         int j = Capacity - 1;
         for (i = newLeaf->NumOfKeys - 1; i >= 0 ; --i) {
             newLeaf->Keys[i] = leaf->Keys[j];
+            newLeaf->Pointers[i] = leaf->Pointers[j];
             j--;
+            NewLeafNumPointers += newLeaf->Keys[i];
         }
         for (i = split - 1; i > indexInLeaf ; --i) {
+            leaf->Pointers[i] = leaf->Pointers[i-1];
             leaf->Keys[i] = leaf->Keys[i-1];
+            LeafNumPointers += leaf->Keys[i];
         }
-        leaf->Keys[i] = newID;
+        LeafNumPointers += length;
+        leaf->Keys[i] = length;
+        leaf->Pointers[i] = reinterpret_cast<NodeDA *>(newPointer);
         i--;
-    } else {// new key is in new_leaf
+        for (; i >= 0; --i) {
+            LeafNumPointers += leaf->Keys[i];
+        }
+    } else {// new array is in new_leaf
         indexInLeaf -= split;
         for (i = 0; i < newLeaf->NumOfKeys ; ++i) {
             if (i == indexInLeaf) {
-                newLeaf->Keys[i] = newID;
+                NewLeafNumPointers += length;
+                newLeaf->Keys[i] = length;
+                newLeaf->Pointers[i] = reinterpret_cast<NodeDA *>(newPointer);
                 break;
             } else {
                 newLeaf->Keys[i] = leaf->Keys[i + split];
+                newLeaf->Pointers[i] = leaf->Pointers[i+split];
+                NewLeafNumPointers += newLeaf->Keys[i];
             }
         }
         i++;
         for (; i < newLeaf->NumOfKeys; i++) {
             newLeaf->Keys[i] = leaf->Keys[i-1+split];
+            newLeaf->Pointers[i] = leaf->Pointers[i-1+split];
+            NewLeafNumPointers += newLeaf->Keys[i];
+        }
+        for (int y = 0; y < leaf->NumOfKeys; ++y) {
+            LeafNumPointers += leaf->Keys[y];
         }
     }
     newLeaf->Parent = leaf->Parent;
@@ -288,12 +528,12 @@ void DAstatic::insertOneIntoLeafAfterSplitting(NodeForStree * leaf, int newID, i
     newLeaf->Previous = leaf;
      */
     leaf->Next = newLeaf;
-    insertIntoParent(leaf, leaf->NumOfKeys, newLeaf, newLeaf->NumOfKeys, needGoupwards);
+    insertIntoParent(leaf, LeafNumPointers, newLeaf, NewLeafNumPointers, needGoupwards);
 }
 
 //insert right after left
-void DAstatic::insertIntoParent(NodeForStree * left, int sumKeysLeft, NodeForStree* right, int sumKeysRight, bool needGoupwards) {
-    NodeForStree * parent = left->Parent;
+void DynamicArray::insertIntoParent(NodeDA * left, int sumKeysLeft, NodeDA * right, int sumKeysRight, bool needGoupwards) {
+    NodeDA * parent = left->Parent;
     if (parent == nullptr) {
         insertIntoNewRoot(left, sumKeysLeft, right, sumKeysRight);
         return;
@@ -308,16 +548,16 @@ void DAstatic::insertIntoParent(NodeForStree * left, int sumKeysLeft, NodeForStr
 }
 
 // insert right after leftIndex, modify right key and go upwards if needed
-void DAstatic::insertIntoNode(NodeForStree * n, int leftIndex, int sumKeysRight, NodeForStree * right, bool needGoUpward) {
+void DynamicArray::insertIntoNode(NodeDA * n, int leftIndex, int sumKeysRight, NodeDA * right, bool needGoUpward) {
     n->NumOfKeys ++;
     int i = 0;
     int keyToStore = sumKeysRight;
-    NodeForStree * pointerToStore = right;
+    NodeDA * pointerToStore = right;
     right->Parent = n;
     i = leftIndex + 1;
     for (; i < n->NumOfKeys - 1; i++) {
         int tmpKey = n->Keys[i];
-        NodeForStree * tmpPointer = n->Pointers[i];
+        NodeDA * tmpPointer = n->Pointers[i];
         n->Keys[i] = keyToStore;
         n->Pointers[i] = pointerToStore;
         keyToStore = tmpKey;
@@ -329,8 +569,8 @@ void DAstatic::insertIntoNode(NodeForStree * n, int leftIndex, int sumKeysRight,
         return;
     }
     int delta = 0;
-    NodeForStree * c = n;
-    NodeForStree * parent = c->Parent;
+    NodeDA * c = n;
+    NodeDA * parent = c->Parent;
     if (parent == nullptr) {
         return;
     }
@@ -356,12 +596,12 @@ void DAstatic::insertIntoNode(NodeForStree * n, int leftIndex, int sumKeysRight,
     }
 }
 
-void DAstatic::insertIntoNodeAfterSplitting(NodeForStree * parent, int leftIndex, int sumKeysRight, NodeForStree * right, bool needGoUpwards) {
+void DynamicArray::insertIntoNodeAfterSplitting(NodeDA * parent, int leftIndex, int sumKeysRight, NodeDA * right, bool needGoUpwards) {
     int i, j, leftSumKeys = 0, rightSumKeys = 0;
-    NodeForStree * newNode;
+    NodeDA * newNode;
     int * tempKeys;
-    NodeForStree** tempPointers;
-    tempPointers = new NodeForStree*[Capacity + 1];
+    NodeDA ** tempPointers;
+    tempPointers = new NodeDA *[Capacity + 1];
     tempKeys = new int[Capacity+1];
     j = 0;
     for (i = 0; i < parent->NumOfKeys; ++i) {
@@ -370,11 +610,13 @@ void DAstatic::insertIntoNodeAfterSplitting(NodeForStree * parent, int leftIndex
         }
         tempPointers[j] = parent->Pointers[i];
         tempKeys[j] = parent->Keys[i];
+        //parent->Keys[i] = 0;
+        //parent->Pointers[i] = nullptr;
         j++;
     }
     tempPointers[leftIndex + 1] =right;
     tempKeys[leftIndex + 1] = sumKeysRight;
-    newNode = new NodeForStree(Capacity);
+    newNode = new NodeDA(Capacity);
     for ( i = 0; i < Min; ++i) {
         leftSumKeys += tempKeys[i];
         parent->Pointers[i] = tempPointers[i];
@@ -399,10 +641,7 @@ void DAstatic::insertIntoNodeAfterSplitting(NodeForStree * parent, int leftIndex
     insertIntoParent(parent, leftSumKeys, newNode, rightSumKeys, needGoUpwards);
 }
 
-int DAstatic::NodeSumKeys(NodeForStree * n) {
-    if (n->IsLeaf) {
-        return n->NumOfKeys;
-    }
+int DynamicArray::NodeSumKeys(NodeDA * n) {
     int ans = 0;
     for (int i = 0; i < n->NumOfKeys; ++i) {
         ans += n->Keys[i];
@@ -410,7 +649,7 @@ int DAstatic::NodeSumKeys(NodeForStree * n) {
     return ans;
 }
 
-int DAstatic::getLeftIndex(NodeForStree * parent, NodeForStree * left) const {
+int DynamicArray::getLeftIndex(NodeDA * parent, NodeDA * left) {
     int leftIndex = 0;
     while(leftIndex < Capacity && parent->Pointers[leftIndex] != left) {
         leftIndex += 1;
@@ -418,8 +657,8 @@ int DAstatic::getLeftIndex(NodeForStree * parent, NodeForStree * left) const {
     return leftIndex;
 }
 
-void DAstatic::insertIntoNewRoot(NodeForStree * left, int sumKeysLeft, NodeForStree* right, int sumKeysRight) {
-    Root = new NodeForStree(Capacity);
+void DynamicArray::insertIntoNewRoot(NodeDA * left, int sumKeysLeft, NodeDA * right, int sumKeysRight) {
+    Root = new NodeDA(Capacity);
     Root->Keys[0] = sumKeysLeft;
     Root->Pointers[0] = left;
     Root->Keys[1] = sumKeysRight;
@@ -428,24 +667,25 @@ void DAstatic::insertIntoNewRoot(NodeForStree * left, int sumKeysLeft, NodeForSt
     left->Parent = Root;
     right->Parent = Root;
     Root->NumOfKeys = 2;
+    return;
 }
 
-//return leaf, preIndexInLeaf
-NodeForStree * DAstatic::findLeaf(int pos, int * preIndexInLeaf) const {
+//return leaf, preIndexInLeaf, preIndexInArray
+NodeDA * DynamicArray::findLeaf(int pos, int * preIndexInLeaf, int * preIndexInArray) {
     if (pos > NumItems) {
         pos = NumItems;
     }
     bool flag = false;
-    NodeForStree * c = Root;
+    NodeDA * c = Root;
     int p = pos;
     if (pos == 0) {
         p = 1;
         flag = true;
     }
+    int i;
     if (c == nullptr) {
         return c;
     }
-    int i;
     while (!c->IsLeaf) {
         for (i = 0; i < c->NumOfKeys; ++i) {
             if (p <= c->Keys[i]) {
@@ -456,25 +696,51 @@ NodeForStree * DAstatic::findLeaf(int pos, int * preIndexInLeaf) const {
         }
     }
     if (flag) {
-        *preIndexInLeaf = -1;
+        * preIndexInArray = -1;
+        * preIndexInLeaf = -1;
         return c;
     }
-    *preIndexInLeaf = p-1;
+    for (i = 0; i < c->NumOfKeys; i ++ ) {
+        if (p <= c->Keys[i]) {
+            break;
+        }
+        p -= c->Keys[i];
+    }
+    *preIndexInLeaf = i;
+    *preIndexInArray = p-1;
     return c;
 }
 
-int DAstatic::Query(int pos) const {
+int DynamicArray::Query(int pos) const {
     if (pos > NumItems) {
         pos = NumItems;
     }
-    int idxInLeaf;
-    NodeForStree * cur = findLeaf(pos, &idxInLeaf);
-    return cur->Keys[idxInLeaf];
+    NodeDA * c = Root;
+    int p = pos;
+    while (!c->IsLeaf) {
+        for (int i = 0; i < c->NumOfKeys; ++i) {
+            if (p <= c->Keys[i]) {
+                c = c->Pointers[i];
+                break;
+            }
+            p -= c->Keys[i];
+        }
+    }
+    int i = 0;
+    for (; i < c->NumOfKeys; ++i) {
+        if (p <= c->Keys[i]) {
+            break;
+        }
+        p -= c->Keys[i];
+    }
+    p--;
+    int * curarray = reinterpret_cast<int *>(c->Pointers[i]);
+    return curarray[p];
 }
 
 
 //return length of ans, ans is answer array
-int* DAstatic::RangeQuery(int start, int end, int * lenOfAns) const {
+int* DynamicArray::RangeQuery(int start, int end, int * lenOfAns) {
     int dastart = 1;
     int daend = NumItems;
     int realstart = start;
@@ -491,36 +757,375 @@ int* DAstatic::RangeQuery(int start, int end, int * lenOfAns) const {
         return nullptr;
     }
     int *ans = new int[realnum];
-    int idxInLeaf;
-    NodeForStree * cur = findLeaf(realstart, &idxInLeaf);
-    for (int i = 0; i < realnum; i++) {
-        ans[i] = cur->Keys[idxInLeaf];
-        idxInLeaf++;
-        if (idxInLeaf == cur->NumOfKeys) {
-            cur = cur->Next;
-            idxInLeaf = 0;
+    NodeDA * c = Root;
+    int p = realstart;
+    while (!c->IsLeaf) {
+        for (int i = 0; i < c->NumOfKeys; ++i) {
+            if (p <= c->Keys[i]) {
+                c = c->Pointers[i];
+                break;
+            }
+            p -= c->Keys[i];
         }
+    }
+    int i = 0;
+    for (; i < c->NumOfKeys; ++i) {
+        if (p <= c->Keys[i]) {
+            break;
+        }
+        p -= c->Keys[i];
+    }
+    p--;
+    int k = 0;
+    bool flag = false;
+    while (k < realnum) {
+        for (; i < c->NumOfKeys; ++i) {
+            int * curarray = reinterpret_cast<int *>(c->Pointers[i]);
+            for ( ; p < c->Keys[i]; ++p) {
+                ans[k] = curarray[p];
+                ++k;
+                if (k == realnum) {
+                    flag = true;
+                    break;
+                }
+            }
+            if (flag) {
+                break;
+            }
+            p = 0;
+        }
+        if (flag) {
+            break;
+        }
+        if (c->Next == nullptr) {
+            printf("error\n");
+        }
+        c = c->Next;
+        i = 0;
     }
     return ans;
 }
 
-//okstree
-void DAstatic::Delete(int pos) {
+// return  the deleted rid
+int DynamicArray::Delete(int pos) {
+    if (pos < 1) {
+        pos = 1;
+    }
     if (pos > NumItems) {
         pos = NumItems;
     }
-    int IndexInLeaf;
-    NodeForStree * leaf = findLeaf(pos, &IndexInLeaf);
-    deleteEntryForDeleteOperatoin(leaf, IndexInLeaf);
+    int IndexInLeaf, IndexInArray;
+    NodeDA * leaf = findLeaf(pos, &IndexInLeaf, &IndexInArray);
+    int * array = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+    int IDdeleted = array[IndexInArray];
+    int oldlen = leaf->Keys[IndexInLeaf];
+    if (oldlen == Min) { //merge
+        MergeOrRedistributeArrayAfterDelete(leaf, IndexInLeaf, IndexInArray);
+        NumItems--;
+        return IDdeleted;
+    } else if (oldlen < 2 * Capacity) { //must one array
+        int * olda = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        for (int i = IndexInArray; i < oldlen - 1; i ++) {
+            olda[i] = olda[i+1];
+        }
+        leaf->Keys[IndexInLeaf]--;
+        SimplyAdjustAncestorKeysBy(leaf, -1);
+        NumItems--;
+        return IDdeleted;
+    } else {
+        int leftlen = IndexInArray;
+        int rightlen = oldlen -1 -leftlen;
+        if (leftlen >= Capacity && rightlen >= Capacity) {
+            int * olda = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            int * newa = &olda[IndexInArray+1];
+            leaf->Keys[IndexInLeaf] = leftlen;
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
+            if (leaf->NumOfKeys + 1 <= Capacity) {
+                insertOneIntoLeafForDeletion(leaf, newa, rightlen, IndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, newa, rightlen, IndexInLeaf+1);
+            }
+            NumItems--;
+            return IDdeleted;
+        } else if (leftlen < Capacity) {
+            int * olda = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            for ( int i = IndexInArray; i >= 1; i --) {
+                olda[i] = olda[i-1];
+            }
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(&(olda[1]));
+            leaf->Keys[IndexInLeaf] --;
+            SimplyAdjustAncestorKeysBy(leaf, -1);
+            NumItems--;
+            return IDdeleted;
+        } else if (rightlen < Capacity) {
+            int * olda = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            int oldl = leaf->Keys[IndexInLeaf];
+            for (int i = IndexInArray; i < oldl-1; i ++) {
+                olda[i] = olda[i+1];
+            }
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(olda);
+            leaf->Keys[IndexInLeaf]--;
+            SimplyAdjustAncestorKeysBy(leaf, -1);
+            NumItems--;
+            return IDdeleted;
+        }
+    }
     NumItems--;
+    return IDdeleted;
+}
+
+void DynamicArray::MergeOrRedistributeArrayAfterDelete(NodeDA * leaf, int IndexInLeaf, int IndexInArray) {
+    if (IndexInLeaf == 0 && leaf->NumOfKeys == 1) { //root
+        if (IndexInArray == leaf->Keys[0]-1) {
+            leaf->Keys[0]--;
+        } else {
+            int oldL = leaf->Keys[0];
+            int * olda = reinterpret_cast<int *>(leaf->Pointers[0]);
+            for (int i = IndexInArray; i < oldL-1; i ++) {
+                olda[i] = olda[i+1];
+            }
+            leaf->Keys[0]--;
+        }
+        return;
+    } else if( IndexInLeaf == 0 ){ // can only merge or redistribute with right neighbour
+        if (leaf->Keys[1] - 1 >= Capacity) { //redistribute
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[0]);
+            int leftlen = leaf->Keys[0];
+            for (int i = IndexInArray; i < leftlen-1; i ++) {
+                lefta[i] = lefta[i+1];
+            }
+            lefta[leftlen-1] = reinterpret_cast<int *>(leaf->Pointers[1])[0];
+            int * t = reinterpret_cast<int *>(leaf->Pointers[1]);
+            leaf->Pointers[1] = reinterpret_cast<NodeDA *>(&(t[1]));
+            leaf->Keys[1] --;
+            SimplyAdjustAncestorKeysBy(leaf, -1);
+            return;
+        } else    if (leaf->Keys[1] - 1 >= Min) { //redistribute
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[0]);
+            int leftlen = leaf->Keys[0];
+            for (int i = IndexInArray; i < leftlen-1; i ++) {
+                lefta[i] = lefta[i+1];
+            }
+            lefta[leftlen-1] = reinterpret_cast<int *>(leaf->Pointers[1])[0];
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[1]);
+            int rightoldL = leaf->Keys[1];
+            for (int i = 0; i < rightoldL - 1; i ++ ){
+                righta[i] = righta[i+1];
+            }
+            leaf->Keys[1] --;
+            SimplyAdjustAncestorKeysBy(leaf, -1);
+            return;
+        } else { // merge
+            int newl = leaf->Keys[0] + leaf->Keys[1] - 1;
+            int * newa = new int[Capacity];
+            int i = 0;
+            int * lefta= reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            int * righta = reinterpret_cast<int*>(leaf->Pointers[IndexInLeaf + 1]);
+            for (int k = 0; k < IndexInArray; k ++) {
+                newa[i] = lefta[k];
+                i++;
+            }
+            for (int k = IndexInArray+1; k < leaf->Keys[0]; k++){
+                newa[i] = lefta[k];
+                i++;
+            }
+            for (int k = 0; k < leaf->Keys[1]; k ++) {
+                newa[i] = righta[k];
+                i++;
+            }
+            leaf->Keys[0] = newl;
+            leaf->Pointers[0] = reinterpret_cast<NodeDA *>(newa);
+            deleteEntryForDeleteOperatoin(leaf, 1);
+            return;
+        }
+    } else if (IndexInLeaf == leaf->NumOfKeys-1) {// can only merge or redistribute with left neighbour
+        int leftlen = leaf->Keys[IndexInLeaf-1];
+        if (leftlen - 1 >= Capacity) { //redistribute
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            for (int i = IndexInArray; i > 0; i --) {
+                righta[i] = righta[i-1];
+            }
+            righta[0] = reinterpret_cast<int*>(leaf->Pointers[IndexInLeaf-1])[leftlen-1];
+            leaf->Keys[IndexInLeaf-1] --;
+            //leaf->Pointers[IndexInLeaf-1] = leaf->Pointers[IndexInLeaf-1][:leftlen-1];
+            SimplyAdjustAncestorKeysBy(leaf, -1);
+            return;
+        } else if (leftlen - 1 >= Min) { //redistribute
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            for (int i = IndexInArray; i > 0; i --) {
+                righta[i] = righta[i-1];
+            }
+            righta[0] = reinterpret_cast<int*>(leaf->Pointers[IndexInLeaf-1])[leftlen-1];
+            leaf->Keys[IndexInLeaf-1] --;
+            SimplyAdjustAncestorKeysBy(leaf, -1);
+            return;
+        } else { // merge
+            int newl = leaf->Keys[IndexInLeaf] + leaf->Keys[IndexInLeaf-1] - 1;
+            int * newa = new int[Capacity];
+            int i = 0;
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf - 1]);
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            for (int k = 0; k < leaf->Keys[IndexInLeaf-1]; k ++) {
+                newa[i] = lefta[k];
+                i++;
+            }
+            for (int k = 0; k < IndexInArray; k ++) {
+                newa[i] = righta[k];
+                i++;
+            }
+            for (int k = IndexInArray+1; k < leaf->Keys[IndexInLeaf];k++) {
+                newa[i] = righta[k];
+                i++;
+            }
+
+            leaf->Keys[IndexInLeaf] = newl;
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(newa);
+            deleteEntryForDeleteOperatoin(leaf, IndexInLeaf-1);
+            return;
+        }
+    } else {
+        MergeOrRedistributeArrayAfterDeleteInMiddle(leaf, IndexInLeaf, IndexInArray);
+    }
+}
+
+void DynamicArray::MergeOrRedistributeArrayAfterDeleteInMiddle(NodeDA * leaf, int IndexInLeaf, int IndexInArray) {
+    if (leaf->Keys[IndexInLeaf+1] - 1 >= Capacity) { //redistribute with right
+        int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        int leftlen = leaf->Keys[IndexInLeaf];
+        for (int i = IndexInArray; i < leftlen-1; i ++) {
+            lefta[i] = lefta[i+1];
+        }
+        int * t = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf+1]);
+        lefta[leftlen-1] = t[0];
+        leaf->Keys[IndexInLeaf+1] --;
+        leaf->Pointers[IndexInLeaf+1] = reinterpret_cast<NodeDA *>(&(t[1]));
+        SimplyAdjustAncestorKeysBy(leaf, -1);
+        return;
+    } else if (leaf->Keys[IndexInLeaf-1] - 1 >= Capacity) { //redistribute with left
+        int leftlen = leaf->Keys[IndexInLeaf-1];
+        int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        //rightlen = leaf->Keys[IndexInLeaf];
+        for (int i = IndexInArray; i > 0; i --) {
+            righta[i] = righta[i-1];
+        }
+        righta[0] = reinterpret_cast<int*>(leaf->Pointers[IndexInLeaf-1])[leftlen-1];
+        leaf->Keys[IndexInLeaf-1] --;
+        //leaf->Pointers[IndexInLeaf-1] = reinterpret_cast<int*>(leaf->Pointers[IndexInLeaf-1])[:leftlen-1];
+        SimplyAdjustAncestorKeysBy(leaf, -1);
+        return;
+    }  else if (leaf->Keys[IndexInLeaf+1] - 1 >= Min) { //redistribute with right
+        int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        int leftlen = leaf->Keys[IndexInLeaf];
+        for (int i = IndexInArray; i < leftlen-1; i ++) {
+            lefta[i] = lefta[i+1];
+        }
+        lefta[leftlen-1] = reinterpret_cast<int*>(leaf->Pointers[IndexInLeaf+1])[0];
+        int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf + 1]);
+        int rightoldL = leaf->Keys[IndexInLeaf+1];
+        for (int i = 0; i < rightoldL - 1; i ++) {
+            righta[i] = righta[i+1];
+        }
+        leaf->Keys[IndexInLeaf+1] --;
+        SimplyAdjustAncestorKeysBy(leaf, -1);
+        return;
+    } else if (leaf->Keys[IndexInLeaf-1] - 1 >= Min) { //redistribute with left
+        int leftlen = leaf->Keys[IndexInLeaf-1];
+        int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        for (int i = IndexInArray; i > 0; i --) {
+            righta[i] = righta[i-1];
+        }
+        righta[0] = reinterpret_cast<int*>(leaf->Pointers[IndexInLeaf-1])[leftlen-1];
+        leaf->Keys[IndexInLeaf-1] --;
+        SimplyAdjustAncestorKeysBy(leaf, -1);
+        return;
+    } else if (leaf->Keys[IndexInLeaf-1] < leaf->Keys[IndexInLeaf+1]) { //merge with left
+        int newl = leaf->Keys[IndexInLeaf] + leaf->Keys[IndexInLeaf-1] - 1;
+        int * newa = new int[Capacity];
+        int i = 0;
+        int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf - 1]);
+        int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        for (int k = 0; k < leaf->Keys[IndexInLeaf-1]; k ++) {
+            newa[i] = lefta[k];
+            i++;
+        }
+        for (int k = 0; k < IndexInArray; k ++) {
+            newa[i] = righta[k];
+            i++;
+        }
+        for (int k = IndexInArray+1; k < leaf->Keys[IndexInLeaf];k++) {
+            newa[i] = righta[k];
+            i++;
+        }
+        leaf->Keys[IndexInLeaf] = newl;
+        leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(newa);
+        deleteEntryForDeleteOperatoin(leaf, IndexInLeaf-1);
+        return;
+    } else { //merge with right
+        int newl = leaf->Keys[IndexInLeaf+1] + leaf->Keys[IndexInLeaf] - 1;
+        int * newa = new int[Capacity];
+        int i = 0;
+        int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf + 1]);
+        for (int k = 0; k < IndexInArray; k ++) {
+            newa[i] = lefta[k];
+            i++;
+        }
+        for (int k = IndexInArray+1; k < leaf->Keys[IndexInLeaf];k++ ){
+            newa[i] = lefta[k];
+            i++;
+        }
+        for (int k = 0; k < leaf->Keys[IndexInLeaf+1]; k ++) {
+            newa[i] = righta[k];
+            i++;
+        }
+        leaf->Keys[IndexInLeaf] = newl;
+        leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(newa);
+        deleteEntryForDeleteOperatoin(leaf, IndexInLeaf+1);
+        return;
+    }
+}
+
+void DynamicArray::insertOneIntoLeafForDeletion(NodeDA * leaf, int * newa, int length, int indexInLeaf) {
+    int * pointerToStore = newa;
+    int keyToStore = length;
+    leaf->NumOfKeys++;
+    int tmpKey;
+    int i = indexInLeaf;
+    for (; i < leaf->NumOfKeys-1; i++) {
+        tmpKey = leaf->Keys[i];
+        NodeDA * tmpPointer = leaf->Pointers[i];
+        leaf->Keys[i] = keyToStore;
+        leaf->Pointers[i] = reinterpret_cast<NodeDA *>(pointerToStore);
+        keyToStore = tmpKey;
+        pointerToStore = reinterpret_cast<int *>(tmpPointer);
+    }
+    leaf->Keys[i] = keyToStore;
+    leaf->Pointers[i] = reinterpret_cast<NodeDA *>(pointerToStore);
+
+    if (leaf == Root) {
+        return;
+    }
+    NodeDA * c = leaf;
+    NodeDA * parent = c->Parent;
+    while (parent != nullptr) {
+        for (int i = 0; i < parent->NumOfKeys; i++) {
+            //if (reflecDeepEqual(parenPointers[i], c) {
+            if (parent->Pointers[i] == c ) {
+                parent->Keys[i] --;
+                c = parent;
+                parent = c->Parent;
+                break;
+            }
+        }
+    }
+    return;
 }
 
 
 //delete an entry and adjust ancestors
-void DAstatic::deleteEntry(NodeForStree * n, int indexInNode) {
-    int neighbour_index = 0, capacity = 0;
-    NodeForStree * neighbour;
-    int numKeysDeleted = n->Keys[indexInNode];
+void DynamicArray::deleteEntry(NodeDA * n, int indexInNode) {
+    int neighbour_index = 0;
+    NodeDA * neighbour;
     n = removeEntryFromNode(n, indexInNode);
     n->NumOfKeys--;
     if (n == Root) {
@@ -549,9 +1154,9 @@ void DAstatic::deleteEntry(NodeForStree * n, int indexInNode) {
 
 
 //merge into the right node
-NodeForStree * DAstatic::coalesceNodes(NodeForStree * n, NodeForStree * neighbour, int neighbour_index) {
+NodeDA * DynamicArray::coalesceNodes(NodeDA * n, NodeDA * neighbour, int neighbour_index) {
     int i, j;
-    NodeForStree * tmp;
+    NodeDA * tmp;
     int n_index = neighbour_index + 1;
     if (neighbour_index == -1) {
         tmp = n;
@@ -588,9 +1193,9 @@ NodeForStree * DAstatic::coalesceNodes(NodeForStree * n, NodeForStree * neighbou
     return neighbour;
 }
 
-int DAstatic::getLeftNeighborIndex(NodeForStree * n) const {
+int DynamicArray::getLeftNeighborIndex(NodeDA * n) {
     int i = 0, nei = -1;
-    NodeForStree * parent = n->Parent;
+    NodeDA * parent = n->Parent;
     for (i = 0; i < Capacity; ++i) {
         if (parent->Pointers[i] == n) {
             return nei;
@@ -603,25 +1208,30 @@ int DAstatic::getLeftNeighborIndex(NodeForStree * n) const {
 }
 
 
-void DAstatic::redistributeNodes(NodeForStree * n, NodeForStree * neighbour, int neighbour_index) {
+void DynamicArray::redistributeNodes(NodeDA * n, NodeDA * neighbour, int neighbour_index) {
     int i, leftNumKeys, rightNumKeys, leftIndex, leftSumKeys = 0, rightSumKeys = 0;
     if (neighbour_index != -1) { // left neighbour
         int numGoRight = neighbour->NumOfKeys - Min;
         leftIndex = neighbour_index;
+        for (i = 0; i < Min; i++) {
+            leftSumKeys += neighbour->Keys[i];
+        }
         //int indexToGoRight = Min;
         leftNumKeys = Min;
         rightNumKeys = n->NumOfKeys + numGoRight;
         for (int j = rightNumKeys - 1; j >= numGoRight ; --j) {
             n->Pointers[j] = n->Pointers[j - numGoRight];
             n->Keys[j] = n->Keys[j - numGoRight];
+            rightSumKeys += n->Keys[j];
         }
         i = neighbour->NumOfKeys - 1;
         for (int j = numGoRight - 1; j >= 0 ; --j) {
             n->Pointers[j] = neighbour->Pointers[i];
             n->Keys[j] = neighbour->Keys[i];
+            rightSumKeys += n->Keys[j];
             if (n->Pointers[j] != nullptr) {
                 if (!n->IsLeaf) {
-                    NodeForStree * s = n->Pointers[j];
+                    NodeDA * s = n->Pointers[j];
                     s->Parent = n;
                 }
             }
@@ -629,12 +1239,11 @@ void DAstatic::redistributeNodes(NodeForStree * n, NodeForStree * neighbour, int
         }
         n->NumOfKeys = rightNumKeys;
         neighbour->NumOfKeys = leftNumKeys;
-        leftSumKeys = NodeSumKeys(neighbour);
-        rightSumKeys = NodeSumKeys(n);
     } else { // right neighbour
         leftIndex = 0;
         int j = 0;
         for (i = neighbour->NumOfKeys - 1; i >= 0; i--) {
+            rightSumKeys += neighbour->Keys[i];
             j++;
             if (j == Min) {
                 break;
@@ -642,13 +1251,17 @@ void DAstatic::redistributeNodes(NodeForStree * n, NodeForStree * neighbour, int
         }
         int indexToGoLeft = i - 1;
         rightNumKeys = Min;
+        for (int k = 0; k < n->NumOfKeys; k++) {
+            leftSumKeys += n->Keys[k];
+        }
         int tmp_j = n->NumOfKeys;
         for (i = 0; i <= indexToGoLeft; i++) {
             n->Pointers[tmp_j] = neighbour->Pointers[i];
             n->Keys[tmp_j] = neighbour->Keys[i];
+            leftSumKeys += n->Keys[tmp_j];
             if (n->Pointers[tmp_j] != nullptr) {
                 if (!n->IsLeaf) {
-                    NodeForStree * s = n->Pointers[tmp_j];
+                    NodeDA * s = n->Pointers[tmp_j];
                     s->Parent = n;
                 }
             }
@@ -665,11 +1278,9 @@ void DAstatic::redistributeNodes(NodeForStree * n, NodeForStree * neighbour, int
         }
         neighbour->NumOfKeys = rightNumKeys;
         n->NumOfKeys = leftNumKeys;
-        leftSumKeys = NodeSumKeys(n);
-        rightSumKeys = NodeSumKeys(neighbour);
     }
 
-    NodeForStree * c = n->Parent;
+    NodeDA * c = n->Parent;
     if (n->IsLeaf && n->Pointers[0] == nullptr) {
         c->Keys[leftIndex] = leftNumKeys;
         c->Keys[leftIndex+1] = rightNumKeys;
@@ -678,10 +1289,11 @@ void DAstatic::redistributeNodes(NodeForStree * n, NodeForStree * neighbour, int
         c->Keys[leftIndex+1] = rightSumKeys;
     }
     AdjustAncestorKeysAccordingToCurNode(c);
+    return;
 }
 
-void DAstatic::adjustRoot() {
-    NodeForStree * newRoot = nullptr;
+void DynamicArray::adjustRoot() {
+    NodeDA * newRoot = nullptr;
     if (Root->NumOfKeys > 1) {
         return;
     }
@@ -695,15 +1307,16 @@ void DAstatic::adjustRoot() {
         newRoot->Parent = nullptr;
         Root = newRoot;
     }
+    return;
 }
 
-//okstree
+
 // only remove an entry from node, doing nothing else
-NodeForStree * DAstatic::removeEntryFromNode(NodeForStree * n, int indexInNode) {
+NodeDA * DynamicArray::removeEntryFromNode(NodeDA * n, int indexInNode) {
     n->Keys[indexInNode] = 0;
     if (n->Pointers[indexInNode] != nullptr) {
         if (!n->IsLeaf) {
-            NodeForStree * deleted = n->Pointers[indexInNode];
+            NodeDA * deleted = n->Pointers[indexInNode];
             deleted->Parent = nullptr;
             n->Pointers[indexInNode] = nullptr;
             //delete deleted;
@@ -718,29 +1331,66 @@ NodeForStree * DAstatic::removeEntryFromNode(NodeForStree * n, int indexInNode) 
     return n;
 }
 
-//okstree
-void DAstatic::Reorder(int start, int end, int* neworder) const {
+void DynamicArray::Reorder(int start, int end, int* neworder) {
     if (end > NumItems) {
         printf("Error: index exceeds limit!\n");
         return;
     }
-    int length = end-start+1, newIdx = 0;
-    int indexInLeaf;
-    NodeForStree * cur = findLeaf(start, &indexInLeaf);
-    for (int j = 0; j < length; ++j) {
-        cur->Keys[indexInLeaf] = neworder[newIdx];
-        indexInLeaf++;
-        newIdx++;
-        if (indexInLeaf == cur->NumOfKeys) {
-            cur = cur->Next;
-            indexInLeaf = 0;
+    int length = end-start+1;
+    NodeDA * c = Root;
+    int p = start;
+    int i = 0;
+    if (c == nullptr) {
+        return;
+    }
+    while (!c->IsLeaf) {
+        for (int y = 0; y < c->NumOfKeys; ++y) {
+            if (p <= c->Keys[y]) {
+                c = c->Pointers[y];
+                break;
+            }
+            p -= c->Keys[y];
         }
+    }
+    for (; i < c->NumOfKeys; ++i) {
+        if (p <= c->Keys[i]) {
+            break;
+        }
+        p -= c->Keys[i];
+    }
+    p--;
+    int k = 0;
+    bool flag = false;
+    while (k < length) {
+        for (; i < c->NumOfKeys; ++i) {
+            int * curarray = reinterpret_cast<int *>(c->Pointers[i]);
+            for (; p < c->Keys[i]; p++) {
+                curarray[p] = neworder[k];
+                k++;
+                if (k == length) {
+                    flag = true;
+                    break;
+                }
+            }
+            if (flag) {
+                break;
+            }
+            p = 0;
+        }
+        if (flag) {
+            break;
+        }
+        if (c->Next == nullptr) {
+            printf("error\n");
+        }
+        c = c->Next;
+        i = 0;
     }
 }
 
-void DAstatic::coalesceNodesForDeleteOperation(NodeForStree * n, NodeForStree * neighbour, int neighbour_index) {
+void DynamicArray::coalesceNodesForDeleteOperation(NodeDA * n, NodeDA * neighbour, int neighbour_index) {
     int i, j, neighbour_insertion_index;
-    NodeForStree * tmp;
+    NodeDA * tmp;
     int n_index = neighbour_index + 1;
     if (neighbour_index == -1) {
         tmp = n;
@@ -775,12 +1425,12 @@ void DAstatic::coalesceNodesForDeleteOperation(NodeForStree * n, NodeForStree * 
     }
     n->NumOfKeys = 0;
     deleteEntryForDeleteOperatoin(n->Parent, n_index);
+    return;
 }
 
-//okstree
-void DAstatic::deleteEntryForDeleteOperatoin(NodeForStree * n, int indexInNode) {
-    int neighbour_index;
-    NodeForStree * neighbour;
+void DynamicArray::deleteEntryForDeleteOperatoin(NodeDA * n, int indexInNode) {
+    int neighbour_index, capacity;
+    NodeDA * neighbour;
     n = removeEntryFromNode(n, indexInNode);
     n->NumOfKeys--;
     if (n == Root) {
@@ -789,11 +1439,11 @@ void DAstatic::deleteEntryForDeleteOperatoin(NodeForStree * n, int indexInNode) 
     }
     int nNumKeys = n->NumOfKeys;
     if (nNumKeys >= Min) {
-        NodeForStree * tmp = n;
+        NodeDA * tmp = n;
         while (tmp != Root) {
             for (int i = 0; i < Capacity; i++) {
                 if (tmp->Parent->Pointers[i] == tmp) {
-                    tmp->Parent->Keys[i] --;
+                    tmp->Parent->Keys[i] -=1;
                     tmp = tmp->Parent;
                     break;
                 }
@@ -807,7 +1457,8 @@ void DAstatic::deleteEntryForDeleteOperatoin(NodeForStree * n, int indexInNode) 
     } else {
         neighbour = n->Parent->Pointers[neighbour_index];
     }
-    if (neighbour->NumOfKeys + nNumKeys <= Capacity) {
+    capacity = Capacity;
+    if (neighbour->NumOfKeys+nNumKeys <= capacity) {
         coalesceNodesForDeleteOperation(n, neighbour, neighbour_index);
         return;
     } else {
@@ -816,20 +1467,25 @@ void DAstatic::deleteEntryForDeleteOperatoin(NodeForStree * n, int indexInNode) 
     }
 }
 
-void DAstatic::redistributeNodesForDeleteOperation(NodeForStree * n, NodeForStree * neighbour, int neighbour_index) {
+void DynamicArray::redistributeNodesForDeleteOperation(NodeDA * n, NodeDA * neighbour, int neighbour_index) {
     int i, leftNumKeys = 0, rightNumKeys = 0, leftIndex, leftSumKeys = 0, rightSumKeys = 0;
     if (neighbour_index != -1) {
         leftIndex = neighbour_index;
+        for (i = 0; i < Min; i++) {
+            leftSumKeys += neighbour->Keys[i];
+        }
         int indexToGoRight = Min;
         leftNumKeys = Min;
         int temp_keys[2*Capacity];
-        NodeForStree * temp_pointers[2*Capacity];
+        NodeDA * temp_pointers[2*Capacity];
         int tmp_j = 0;
         for (i = indexToGoRight; i < neighbour->NumOfKeys; i++) {
             temp_pointers[tmp_j] = neighbour->Pointers[i];
             temp_keys[tmp_j] = neighbour->Keys[i];
+            rightSumKeys += neighbour->Keys[i];
             tmp_j++;
         }
+        rightSumKeys += NodeSumKeys(n);
         for (i = 0; i < n->NumOfKeys; i++) {
             temp_keys[tmp_j] = n->Keys[i];
             temp_pointers[tmp_j] = n->Pointers[i];
@@ -844,19 +1500,18 @@ void DAstatic::redistributeNodesForDeleteOperation(NodeForStree * n, NodeForStre
             n->Keys[i] = temp_keys[i];
             if (!n->IsLeaf) {
                 if (n->Pointers[i] != nullptr) {
-                    NodeForStree * s = n->Pointers[i];
+                    NodeDA * s = n->Pointers[i];
                     s->Parent = n;
                 }
             }
         }
         neighbour->NumOfKeys = leftNumKeys;
         n->NumOfKeys = rightNumKeys;
-        leftSumKeys = NodeSumKeys(neighbour);
-        rightSumKeys = NodeSumKeys(n);
     } else {
         leftIndex = 0;
         int j = 0;
         for (i = neighbour->NumOfKeys - 1; i >= 0; i--) {
+            rightSumKeys += neighbour->Keys[i];
             j++;
             if (j == Min) {
                 break;
@@ -865,12 +1520,14 @@ void DAstatic::redistributeNodesForDeleteOperation(NodeForStree * n, NodeForStre
         int indexToGoLeft = i - 1;
         rightNumKeys = Min;
         int tmp_j = n->NumOfKeys;
+        leftSumKeys = NodeSumKeys(n);
         for (i = 0; i <= indexToGoLeft; i++) {
             n->Pointers[tmp_j] = neighbour->Pointers[i];
             n->Keys[tmp_j] = neighbour->Keys[i];
+            leftSumKeys += n->Keys[tmp_j];
             if (!n->IsLeaf) {
                 if (n->Pointers[tmp_j] != nullptr) {
-                    NodeForStree * s = n->Pointers[tmp_j];
+                    NodeDA * s = n->Pointers[tmp_j];
                     s->Parent = n;
                 }
             }
@@ -885,14 +1542,12 @@ void DAstatic::redistributeNodesForDeleteOperation(NodeForStree * n, NodeForStre
         }
         neighbour->NumOfKeys = rightNumKeys;
         n->NumOfKeys = leftNumKeys;
-        leftSumKeys = NodeSumKeys(n);
-        rightSumKeys = NodeSumKeys(neighbour);
     }
-    NodeForStree * c = n->Parent;
+    NodeDA * c = n->Parent;
     c->Keys[leftIndex] = leftSumKeys;
     c->Keys[leftIndex+1] = rightSumKeys;
     c = n->Parent;
-    NodeForStree * parent = c->Parent;
+    NodeDA * parent = c->Parent;
     while (parent != nullptr) {
         for (i = 0; i < parent->NumOfKeys; i++) {
             if (parent->Pointers[i] == c) {
@@ -903,63 +1558,345 @@ void DAstatic::redistributeNodesForDeleteOperation(NodeForStree * n, NodeForStre
             }
         }
     }
+    return;
 }
+
+void DynamicArray::CutArray(int pos) {
+    int IndexInLeaf, IndexInArray;
+    NodeDA * leaf = findLeaf(pos, &IndexInLeaf, &IndexInArray);
+    if (IndexInArray == 0) {
+        return;
+    } else {
+        int * tmp = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        int oldlen = leaf->Keys[IndexInLeaf];
+        int leftl = IndexInArray;
+        int rightl = oldlen-leftl;
+        if (leftl >= Capacity && rightl >= Capacity) {
+            leaf->Keys[IndexInLeaf] = leftl;
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(tmp);
+            int * righta = &tmp[IndexInArray];
+            if (leaf->NumOfKeys < Capacity) {
+                insertOneIntoLeafForCut(leaf, righta, rightl, IndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightl, IndexInLeaf+1, false);
+            }
+            return;
+        } else if (leftl >= Capacity) {
+            int * righta = new int[Capacity];
+            for (int i = 0; i < rightl; i ++) {
+                righta[i] = tmp[IndexInArray+i];
+            }
+            leaf->Keys[IndexInLeaf] = leftl;
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(tmp);
+            if (leaf->NumOfKeys < Capacity) {
+                insertOneIntoLeafForCut(leaf, righta, rightl, IndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightl, IndexInLeaf+1, false);
+            }
+            return;
+        } else if (rightl >= Capacity) {
+            int * lefta = new int[Capacity];
+            for (int i = 0; i < leftl; i ++) {
+                lefta[i] = tmp[i];
+            }
+            leaf->Keys[IndexInLeaf] = leftl;
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(lefta);
+            int * righta = &tmp[IndexInArray];
+            if (leaf->NumOfKeys < Capacity) {
+                insertOneIntoLeafForCut(leaf, righta, rightl, IndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightl, IndexInLeaf+1, false);
+            }
+            return;
+        } else {
+            int * righta = new int[Capacity];
+            for (int i = 0; i < rightl; i ++) {
+                righta[i] = tmp[IndexInArray+i];
+            }
+            leaf->Keys[IndexInLeaf] = leftl;
+            if (leaf->NumOfKeys < Capacity) {
+                insertOneIntoLeafForCut(leaf, righta, rightl, IndexInLeaf+1);
+            } else {
+                insertOneIntoLeafAfterSplitting(leaf, righta, rightl, IndexInLeaf+1, false);
+            }
+            return;
+        }
+    }
+}
+
+//only insert one array into leaf, without changing ancestors' keys
+void DynamicArray::insertOneIntoLeafForCut(NodeDA *  leaf, int * newarray, int length, int indexInLeaf) {
+    int * pointerToStore = newarray;
+    int keyToStore = length;
+    leaf->NumOfKeys++;
+    int tmpKey;
+    int i = indexInLeaf;
+    for (; i < leaf->NumOfKeys-1; i++) {
+        tmpKey = leaf->Keys[i];
+        NodeDA * tmpPointer = leaf->Pointers[i];
+        leaf->Keys[i] = keyToStore;
+        leaf->Pointers[i] = reinterpret_cast<NodeDA *>(pointerToStore);
+        keyToStore = tmpKey;
+        pointerToStore = reinterpret_cast<int *>(tmpPointer);
+    }
+    leaf->Keys[i] = keyToStore;
+    leaf->Pointers[i] = reinterpret_cast<NodeDA *>(pointerToStore);
+    return;
+}
+
 
 
 //=============================================swap=========================================================
 
-void DAstatic::Swap(int start1, int end1, int start2, int end2) {
-
+void DynamicArray::Swap(int start1, int end1, int start2, int end2) {
+    //cut array from edges of swapping ranges
+    CutArray(start1);
+    CutArray(end1+1);
+    CutArray(start2);
+    CutArray(end2+1);
+   // printf("after cutarray:\n");
+   // PrintTree();
     int numLeaf1, numLeaf2, startIndexLeaf1, startIndexLeaf2, endIndexLeaf1, endIndexLeaf2;
-    NodeForStree ** inter1 = nullptr;
-    NodeForStree ** inter2 = nullptr;
+    NodeDA ** inter1 = nullptr;
+    NodeDA ** inter2 = nullptr;
     numLeaf1 = RangePosInLeafPointer(start1, end1, &inter1, &startIndexLeaf1, &endIndexLeaf1);
     numLeaf2 = RangePosInLeafPointer(start2, end2, &inter2, &startIndexLeaf2, &endIndexLeaf2);
 
     swapLeaf(inter1, inter2, numLeaf1, numLeaf2, startIndexLeaf1, endIndexLeaf1, startIndexLeaf2, endIndexLeaf2);
+    int s1 = start1;
+    int e1 = s1+(end2-start2);
+    int e2 = end2;
+    int s2 = e2 - (end1-start1);
+    CheckMinArrayAfterSwap(s1-1);
+    CheckMinArrayAfterSwap(s1);
+    CheckMinArrayAfterSwap(e1-1);
+    CheckMinArrayAfterSwap(e1);
+    CheckMinArrayAfterSwap(e1+1);
+    CheckMinArrayAfterSwap(s2-1);
+    CheckMinArrayAfterSwap(s2);
+    CheckMinArrayAfterSwap(e2-1);
+    CheckMinArrayAfterSwap(e2);
+    CheckMinArrayAfterSwap(e2+1);
 }
+/*
+void DAonedp::Swap(int start1, int end1, int start2, int end2, int* CutArrayTime, int* FindLeafTime, int* swapLeafTime, int*CheckMinTime) {
+    TimeVar time1 = timeNow();
+    //cut array from edges of swapping ranges
+    CutArray(start1);
+    CutArray(end1+1);
+    CutArray(start2);
+    CutArray(end2+1);
+    TimeVar time2 = timeNow();
+    *CutArrayTime = duration(time2-time1);
 
-int DAstatic::RangePosInLeafPointer(int start, int end, NodeForStree *** inter, int * startIndexLeaf, int * endIndexLeaf){
+    TimeVar time3 = timeNow();
+    int numLeaf1, numLeaf2, startIndexLeaf1, startIndexLeaf2, endIndexLeaf1, endIndexLeaf2;
+    NodeDA ** inter1 = nullptr;
+    NodeDA ** inter2 = nullptr;
+    numLeaf1 = RangePosInLeafPointer(start1, end1, &inter1, &startIndexLeaf1, &endIndexLeaf1);
+    numLeaf2 = RangePosInLeafPointer(start2, end2, &inter2, &startIndexLeaf2, &endIndexLeaf2);
+    TimeVar time4 = timeNow();
+    *FindLeafTime = duration(time4-time3);
+
+    TimeVar time5 = timeNow();
+    swapLeaf(inter1, inter2, numLeaf1, numLeaf2, startIndexLeaf1, endIndexLeaf1, startIndexLeaf2, endIndexLeaf2);
+    TimeVar time6 = timeNow();
+    *swapLeafTime = duration(time6-time5);
+    //cout<<"after swapLeaf"<<endl;
+    //PrintTree();
+    TimeVar time7 = timeNow();
+    int s1 = start1;
+    int e1 = s1+(end2-start2);
+    int e2 = end2;
+    int s2 = e2 - (end1-start1);
+    CheckMinArrayAfterSwap(s1-1);
+    CheckMinArrayAfterSwap(s1);
+    CheckMinArrayAfterSwap(e1);
+    CheckMinArrayAfterSwap(e1+1);
+    CheckMinArrayAfterSwap(s2-1);
+    CheckMinArrayAfterSwap(s2);
+    CheckMinArrayAfterSwap(e2);
+    CheckMinArrayAfterSwap(e2+1);
+    TimeVar time8 = timeNow();
+    *CheckMinTime = duration(time8-time7);
+}
+*/
+int DynamicArray::RangePosInLeafPointer(int start, int end, NodeDA *** inter, int * startIndexLeaf, int * endIndexLeaf){
     int numLeaf = 0;
     int numLeafMost = (end-start+1)/Min + 2;
-    *inter = new NodeForStree* [numLeafMost];
-    NodeForStree * leaf = findLeaf(start, startIndexLeaf);
-    *((*inter)) = leaf;
+    *inter = new NodeDA * [numLeafMost];
+    int i_leafArray = 0;
+    NodeDA * StartLeaf;
+    int StartIndexInLeaf, StartIndexInArray;
+    StartLeaf = findLeaf(start, &StartIndexInLeaf, &StartIndexInArray);
+    NodeDA * c = StartLeaf;
     int length = end - start + 1;
-    if (length <= leaf->NumOfKeys - *startIndexLeaf) {
-        *endIndexLeaf = *startIndexLeaf + length - 1;
-        return 1;
+    int i_leaf = StartIndexInLeaf;
+    if (StartIndexInArray != 0) {
+        printf("error in RangePosInLeafPointer!\n");
     }
-    length -= leaf->NumOfKeys - *startIndexLeaf;
-    int ansIdx = 1;
-    NodeForStree * cur = leaf->Next;
-    while (true) {
-        *((*inter) + ansIdx) = cur;
-        if (length <= cur->NumOfKeys) {
-            *endIndexLeaf = length - 1;
-            return ansIdx+1;
-        } else {
-            length -= cur->NumOfKeys;
-            ansIdx++;
-            cur = cur->Next;
+    while (c != nullptr) {
+        *((*inter)+i_leafArray) = c;
+        i_leafArray++;
+        numLeaf++;
+        for (int j = i_leaf; j < c->NumOfKeys; j++) {
+            if (length < c->Keys[j]) {
+                printf("error in RangePosInLeafPointer!\n");
+            } else if (length == c->Keys[j]) {
+                * startIndexLeaf = StartIndexInLeaf;
+                * endIndexLeaf = j;
+                return numLeaf;
+            } else {
+                length -= c->Keys[j];
+            }
         }
+        c = c->Next;
+        i_leaf = 0;
     }
-    return  0;
+    inter = nullptr;
+    numLeaf = 0;
+    * startIndexLeaf = 0;
+    * endIndexLeaf = 0;
+    return numLeaf;
 }
 
+void DynamicArray::CheckMinArrayAfterSwap(int s){
+    if (s == 0) {
+        return;
+    }
+    int IndexInLeaf, IndexInArray;
+    NodeDA * leaf = findLeaf(s, &IndexInLeaf, &IndexInArray);
+    if (leaf->Keys[IndexInLeaf] >= Min) {
+        return;
+    }
+    MergeRedistributeArrayAfterSwap(leaf, IndexInLeaf);
+}
 
-void DAstatic::deleteEntryForCheckMinArray(NodeForStree * n, int indexInNode) {
-    int min_keys, neighbour_index, capacity;
-    NodeForStree * neighbour;
+void DynamicArray::MergeRedistributeArrayAfterSwap(NodeDA * leaf, int IndexInLeaf) {
+    if (IndexInLeaf == 0) { // can only adjust with right array
+        int leftl = leaf->Keys[0];
+        int rightl = leaf->Keys[1];
+        if (rightl == 0) {
+            return;
+        }
+        if (rightl + leftl <= Capacity) { // merge
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[0]);
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[1]);
+            int  newl = leftl+rightl;
+            for (int i = leftl; i < newl; i ++) {
+                lefta[i] = righta[i-leftl];
+            }
+            leaf->Keys[0] = newl;
+            deleteEntryForCheckMinArray(leaf, 1);
+            return;
+        } else if (rightl + leftl < Capacity + Min) { // redistribute but right needs to move keys
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[0]);
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[1]);
+            int NumToMove = Min - leftl;
+            int k = leftl;
+            for (int i = 0; i < NumToMove; i ++) {
+                lefta[k] = righta[i];
+                k++;
+            }
+            rightl = rightl - NumToMove;
+            leftl += NumToMove;
+            for (int i = 0; i < rightl; i ++) {
+                righta[i] = righta[i+NumToMove];
+            }
+            leaf->Keys[1] -= NumToMove;
+            leaf->Keys[0] += NumToMove;
+            return;
+        } else { // redistribute
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[0]);
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[1]);
+            int NumToMove = Min - leftl;
+            int k = leftl;
+            for (int i = 0; i < NumToMove; i ++) {
+                lefta[k] = righta[i];
+                k++;
+            }
+            leaf->Keys[0]+= NumToMove;
+            leaf->Pointers[1] = reinterpret_cast<NodeDA *>(&(righta[NumToMove])); // must be &()
+            leaf->Keys[1]-=NumToMove;
+            return;
+        }
+    } else { // with left neighbour
+        int leftl = leaf->Keys[IndexInLeaf-1];
+        int rightl = leaf->Keys[IndexInLeaf];
+        if (leftl == 0) {
+            return;
+        }
+        if (leftl + rightl <= Capacity) { // merge
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf - 1]);
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            int newl = leftl+rightl;
+            for (int i = leftl; i < newl; i ++) {
+                lefta[i] = righta[i-leftl];
+            }
+            leaf->Keys[IndexInLeaf-1] = newl;
+            deleteEntryForCheckMinArray(leaf, IndexInLeaf);
+            return;
+        } else if (leftl + rightl < Capacity + Min) { // redistribute
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf - 1]);
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            int NumToMove = Min - rightl;
+            int j = rightl-1;
+            int i = Min - 1;
+            for (; i >= 0; i --) {
+                righta[i] = righta[j];
+                if (j == 0) {
+                    break;
+                }
+                j--;
+            }
+            int k = leftl-1;
+            i--;
+            for (; i >= 0; i --) {
+                righta[i] = lefta[k];
+                k--;
+            }
+            leaf->Keys[IndexInLeaf-1] -= NumToMove;
+            leaf->Keys[IndexInLeaf] += NumToMove;
+            return;
+        } else { // redistribute
+            int * lefta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf - 1]);
+            int * righta = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+            int NumToMove = Min - rightl;
+            int j = rightl-1;
+            int i = Min - 1;
+            for (; i >= 0; i --) {
+                righta[i] = righta[j];
+                if (j == 0) {
+                    break;
+                }
+                j--;
+            }
+            int k = leftl-1;
+            i--;
+            for (; i >= 0; i --) {
+                righta[i] = lefta[k];
+                k--;
+            }
+            leaf->Keys[IndexInLeaf-1] -= NumToMove;
+            leaf->Keys[IndexInLeaf] += NumToMove;
+            leaf->Pointers[IndexInLeaf-1] = reinterpret_cast<NodeDA *>(lefta);
+            //leaf->Pointers[IndexInLeaf-1] = lefta[:leftl-NumToMove];
+            return;
+        }
+    }
+}
+
+void DynamicArray::deleteEntryForCheckMinArray(NodeDA * n, int indexInNode) {
+    int neighbour_index, capacity;
+    NodeDA * neighbour;
     n = removeEntryFromNode(n, indexInNode);
     n->NumOfKeys--;
     if (n == Root) {
         adjustRoot();
         return;
     }
-    min_keys = Min;
     int nNumKeys = n->NumOfKeys;
-    if (nNumKeys >= min_keys) {
+    if (nNumKeys >= Min) {
         return;
     }
 
@@ -981,20 +1918,18 @@ void DAstatic::deleteEntryForCheckMinArray(NodeForStree * n, int indexInNode) {
     }
 }
 
-void DAstatic::redistributeNodesForCheckMinArray(NodeForStree * n, NodeForStree * neighbour, int neighbour_index) {
+void DynamicArray::redistributeNodesForCheckMinArray(NodeDA * n, NodeDA * neighbour, int neighbour_index) {
     int i, leftNumKeys = 0, rightNumKeys = 0, leftIndex, leftSumKeys = 0, rightSumKeys = 0;
-
-    int min_keys = Min;
     if (neighbour_index != -1) { // neighbor (more keys) is on the left
         leftIndex = neighbour_index;
-        for (i = 0; i < min_keys; i++) {
+        for (i = 0; i < Min; i++) {
             leftSumKeys += neighbour->Keys[i];
         }
-        int indexToGoRight = min_keys;
-        leftNumKeys = min_keys;
+        int indexToGoRight = Min;
+        leftNumKeys = Min;
 
         int * temp_keys = new int[Capacity*2];
-        NodeForStree ** temp_pointers = new NodeForStree*[Capacity*2];
+        NodeDA ** temp_pointers = new NodeDA *[Capacity*2];
         int tmp_j = 0;
         for (i = indexToGoRight; i < neighbour->NumOfKeys; i++ ){
             temp_pointers[tmp_j] = neighbour->Pointers[i];
@@ -1017,7 +1952,7 @@ void DAstatic::redistributeNodesForCheckMinArray(NodeForStree * n, NodeForStree 
             n->Keys[i] = temp_keys[i];
             if (!n->IsLeaf) {
                 if (n->Pointers[i] != nullptr) {
-                    NodeForStree * s = n->Pointers[i];
+                    NodeDA * s = n->Pointers[i];
                     s->Parent = n;
                 }
             }
@@ -1030,12 +1965,12 @@ void DAstatic::redistributeNodesForCheckMinArray(NodeForStree * n, NodeForStree 
         for (i = neighbour->NumOfKeys - 1; i >= 0; i--) {
             rightSumKeys += neighbour->Keys[i];
             j++;
-            if (j == min_keys) {
+            if (j == Min) {
                 break;
             }
         }
         int indexToGoLeft = i - 1;
-        rightNumKeys = min_keys;
+        rightNumKeys = Min;
 
         int tmp_j = n->NumOfKeys;
         leftSumKeys = NodeSumKeys(n);
@@ -1045,7 +1980,7 @@ void DAstatic::redistributeNodesForCheckMinArray(NodeForStree * n, NodeForStree 
             leftSumKeys += n->Keys[tmp_j];
             if (!n->IsLeaf) {
                 if (n->Pointers[tmp_j] != nullptr) {
-                    NodeForStree * s = n->Pointers[tmp_j];
+                    NodeDA * s = n->Pointers[tmp_j];
                     s->Parent = n;
                 }
             }
@@ -1053,7 +1988,7 @@ void DAstatic::redistributeNodesForCheckMinArray(NodeForStree * n, NodeForStree 
         }
         leftNumKeys = tmp_j;
         int k = indexToGoLeft + 1;
-        for (i = 0; i < min_keys; i++) {
+        for (i = 0; i < Min; i++) {
             neighbour->Keys[i] = neighbour->Keys[k];
             neighbour->Pointers[i] = neighbour->Pointers[k];
             k++;
@@ -1061,17 +1996,17 @@ void DAstatic::redistributeNodesForCheckMinArray(NodeForStree * n, NodeForStree 
         neighbour->NumOfKeys = rightNumKeys;
         n->NumOfKeys = leftNumKeys;
     }
-    NodeForStree * c = n->Parent;
+    NodeDA * c = n->Parent;
     c->Keys[leftIndex] = leftSumKeys;
     c->Keys[leftIndex+1] = rightSumKeys;
     return;
 }
 
-void DAstatic::coalesceNodesForCheckMinArray(NodeForStree * n, NodeForStree * neighbour, int neighbour_index) {
+void DynamicArray::coalesceNodesForCheckMinArray(NodeDA * n, NodeDA * neighbour, int neighbour_index) {
     int i, j, neighbour_insertion_index ;
-    NodeForStree *  tmp ;
+    NodeDA *  tmp ;
     int n_index = neighbour_index + 1;
-    //set neighbor to be the node on the left
+    //set neighbor to be the NodeDA on the left
     if (neighbour_index == -1) {
         tmp = n;
         n = neighbour;
@@ -1100,17 +2035,18 @@ void DAstatic::coalesceNodesForCheckMinArray(NodeForStree * n, NodeForStree * ne
         neighbour->Next = n->Next;
         /*
         if (neighbour->Next != nullptr) {
-            NodeForStree * tmp = neighbour->Next;
+            NodeDA * tmp = neighbour->Next;
             tmp->Previous = neighbour;
         }
          */
     }
     n->NumOfKeys = 0;
     deleteEntryForCheckMinArray(n->Parent, n_index);
+    return;
 }
 
-int DAstatic::getIndexInParent(NodeForStree * n) const {
-    NodeForStree * parent = n->Parent;
+int DynamicArray::getIndexInParent(NodeDA * n) {
+    NodeDA * parent = n->Parent;
     for (int i = 0; i < Capacity; i++) {
         if (parent->Pointers[i] == n) {
             return i;
@@ -1121,8 +2057,8 @@ int DAstatic::getIndexInParent(NodeForStree * n) const {
 
 
 //--------------------------------------------------------- ***
-void DAstatic::swapLeaf(NodeForStree ** inter1, NodeForStree ** inter2, int numLeaf1, int numLeaf2, int startIndexLeaf1,
-                        int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::swapLeaf(NodeDA ** inter1, NodeDA ** inter2, int numLeaf1, int numLeaf2, int startIndexLeaf1,
+                            int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     if (inter1[numLeaf1-1] == inter2[0]) { //head = tail
         if (numLeaf1 == 1 && numLeaf2 == 1) {
             swapHeadTail11(inter1[0], startIndexLeaf1, endIndexLeaf1, startIndexLeaf2, endIndexLeaf2);
@@ -1183,16 +2119,16 @@ void DAstatic::swapLeaf(NodeForStree ** inter1, NodeForStree ** inter2, int numL
         SwapWhenLeftLenIs2(inter2[0], inter2[1], startIndexLeaf2, endIndexLeaf2, inter1, numLeaf1, startIndexLeaf1, endIndexLeaf1);
         return;
     }
-    NodeForStree **node1 = inter1;
-    NodeForStree **node2 = inter2;
+    NodeDA **node1 = inter1;
+    NodeDA **node2 = inter2;
     //TimeVar time1 = timeNow();
     swapWholeLeafAndGoUpwards(node1, node2, numLeaf1, numLeaf2);
     //TimeVar time2 = timeNow();
     //printf("time to swapWholeLeafAndGoUpwards = %d\n", duration(time2-time1));
 
     //move pointers in starting leaf
-    NodeForStree * lastl1 = node1[numLeaf1-1];
-    NodeForStree * lastl2 = node2[numLeaf2-1];
+    NodeDA * lastl1 = node1[numLeaf1-1];
+    NodeDA * lastl2 = node2[numLeaf2-1];
     if (startIndexLeaf1 > 0 && startIndexLeaf2 > 0) {
         swapStartPointer(node1[0], startIndexLeaf1-1, node2[0], startIndexLeaf2-1);
     } else if (startIndexLeaf1 > 0 && startIndexLeaf2 == 0) {
@@ -1216,8 +2152,8 @@ void DAstatic::swapLeaf(NodeForStree ** inter1, NodeForStree ** inter2, int numL
 }
 
 
-void DAstatic::swapEndPointer(NodeForStree * leftLeaf, int indexInLeftLeaf, int endIndexInLeftLeaf,
-                              NodeForStree * rightLeaf, int indexInRightLeaf , int endIndexInRightLeaf) {
+void DynamicArray::swapEndPointer(NodeDA * leftLeaf, int indexInLeftLeaf, int endIndexInLeftLeaf,
+                                  NodeDA * rightLeaf, int indexInRightLeaf , int endIndexInRightLeaf) {
     int len1 = endIndexInLeftLeaf + 1 - indexInLeftLeaf;
     int len2 = endIndexInRightLeaf + 1 - indexInRightLeaf;
 
@@ -1229,6 +2165,9 @@ void DAstatic::swapEndPointer(NodeForStree * leftLeaf, int indexInLeftLeaf, int 
         exchangeNum = len2;
     }
     for (int k = 0; k < exchangeNum; k++) {
+        NodeDA * tmpPointer = leftLeaf->Pointers[i];
+        leftLeaf->Pointers[i] = rightLeaf->Pointers[j];
+        rightLeaf->Pointers[j] = tmpPointer;
         int tmpKey = leftLeaf->Keys[i];
         leftLeaf->Keys[i] = rightLeaf->Keys[j];
         rightLeaf->Keys[j] = tmpKey;
@@ -1247,13 +2186,30 @@ void DAstatic::swapEndPointer(NodeForStree * leftLeaf, int indexInLeftLeaf, int 
     }
 }
 
+NodeDA * DynamicArray::findPrevious(NodeDA * node) {
+    if (node == Root || node->Parent == nullptr) {
+        return nullptr;
+    }
+    int idxInParent = getIndexInParent(node);
+    if (idxInParent > 0) {
+        NodeDA * cur = node->Parent->Pointers[idxInParent-1];
+        while (!cur->IsLeaf) {
+            cur = cur->Pointers[cur->NumOfKeys-1];
+        }
+        return cur;
+    } else {
+        return findPrevious(node->Parent);
+    }
+}
+
 //call this function after deleting a range of leaves
-void DAstatic::CallRedistributeMergeRecomputeKeysInAncestorsLeftPart(NodeForStree * preLeaf, NodeForStree ** leafToDelete, int numLeafToDelete) {
-    NodeForStree * leftLeafParent = leafToDelete[0]->Parent;
-    NodeForStree * rightLeafParent = leafToDelete[numLeafToDelete-1]->Parent;
+void DynamicArray::CallRedistributeMergeRecomputeKeysInAncestorsLeftPart(NodeDA * preLeaf, NodeDA ** leafToDelete, int numLeafToDelete) {
+    NodeDA * leftLeafParent = leafToDelete[0]->Parent;
+    NodeDA * rightLeafParent = leafToDelete[numLeafToDelete-1]->Parent;
     if (leftLeafParent->NumOfKeys != 0) {
         RedistributeMergeRecomputeKeysInAncestorsLeftPart(leftLeafParent);
     } else {
+        //NodeDA * pre = findPrevious(leafToDelete[0]);
         if (preLeaf != nullptr) {
             leftLeafParent = preLeaf->Parent;
             RedistributeMergeRecomputeKeysInAncestorsLeftPart(leftLeafParent);
@@ -1274,7 +2230,7 @@ void DAstatic::CallRedistributeMergeRecomputeKeysInAncestorsLeftPart(NodeForStre
 }
 
 
-void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree **wholeLeaf2, int w1, int w2) {
+void DynamicArray::swapWholeLeafAndGoUpwards(NodeDA **wholeLeaf1, NodeDA **wholeLeaf2, int w1, int w2) {
     int remain, exchangeNum;
     if (w1 == w2) {
         exchangeNum = w1;
@@ -1288,18 +2244,18 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
     }
 
     //---------------------------start exchange corresponding leaves------------------------------------------
-    NodeForStree *  LeftEdgeLeaf = nullptr, * RightEdgeLeaf = nullptr;
-    NodeForStree ** LeftParentArray = new NodeForStree* [exchangeNum];
-    NodeForStree ** RightParentArray = new NodeForStree* [exchangeNum];
+    NodeDA * LeftEdgeLeaf = nullptr, * RightEdgeLeaf = nullptr;
+    NodeDA ** LeftParentArray = new NodeDA * [exchangeNum];
+    NodeDA ** RightParentArray = new NodeDA * [exchangeNum];
     int lp = 0, rp = 0;
-    NodeForStree * lastLeftGrandParent = nullptr;
-    NodeForStree * lastRightGrandParent = nullptr;
+    NodeDA * lastLeftGrandParent = nullptr;
+    NodeDA * lastRightGrandParent = nullptr;
 
     // adjust next, previous pointers
-    NodeForStree * LeftStartLeaf = wholeLeaf1[0];
-    NodeForStree * RightStartLeaf = wholeLeaf2[0];
-    NodeForStree * LeftEndLeaf = wholeLeaf1[exchangeNum-1];
-    NodeForStree * RightEndLeaf = wholeLeaf2[exchangeNum-1];
+    NodeDA * LeftStartLeaf = wholeLeaf1[0];
+    NodeDA * RightStartLeaf = wholeLeaf2[0];
+    NodeDA * LeftEndLeaf = wholeLeaf1[exchangeNum-1];
+    NodeDA * RightEndLeaf = wholeLeaf2[exchangeNum-1];
     if (LeftEndLeaf->Next == RightStartLeaf) {
         LeftEndLeaf->Next = RightEndLeaf->Next;
         /*
@@ -1307,8 +2263,8 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
             LeftEndLeaf->Next->Previous = LeftEndLeaf;
         }
         RightStartLeaf->Previous = LeftStartLeaf->Previous;
-        */
-        NodeForStree * preLeftStar = findPrevious(LeftStartLeaf);
+         */
+        NodeDA * preLeftStar = findPrevious(LeftStartLeaf);
         if (preLeftStar != nullptr) {
             preLeftStar->Next = RightStartLeaf;
         }
@@ -1320,8 +2276,8 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
         RightEdgeLeaf = wholeLeaf2[0];
         /*
         if (LeftEdgeLeaf->Next == RightEdgeLeaf) {
-            NodeForStree * LeftPre = LeftEdgeLeaf->Previous;
-            RightEdgeLeaf->Previous = LeftPre;
+            NodeDA * LeftPre = findPrevious(LeftEdgeLeaf);
+            //RightEdgeLeaf->Previous = LeftPre;
             if (LeftPre != nullptr) {
                 LeftPre->Next = RightEdgeLeaf;
             }
@@ -1329,8 +2285,8 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
             LeftEdgeLeaf->Previous = RightEdgeLeaf;
         } else {
          */
-        NodeForStree * LeftPre = findPrevious(LeftEdgeLeaf);
-        NodeForStree * RightPre = findPrevious(RightEdgeLeaf);
+        NodeDA * LeftPre = findPrevious(LeftEdgeLeaf);
+        NodeDA * RightPre = findPrevious(RightEdgeLeaf);
         //RightEdgeLeaf->Previous = LeftPre;
         if (LeftPre != nullptr) {
             LeftPre->Next = RightEdgeLeaf;
@@ -1339,12 +2295,12 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
         if (RightPre != nullptr) {
             RightPre->Next = LeftEdgeLeaf;
         }
-        //}
+
         LeftEdgeLeaf = wholeLeaf1[exchangeNum-1];
         RightEdgeLeaf = wholeLeaf2[exchangeNum-1];
         //need to adjust next previous pointers of the last two exchanging leaves
-        NodeForStree * LeftNext = LeftEdgeLeaf->Next;
-        NodeForStree * RightNext = RightEdgeLeaf->Next;
+        NodeDA * LeftNext = LeftEdgeLeaf->Next;
+        NodeDA * RightNext = RightEdgeLeaf->Next;
         RightEdgeLeaf->Next = LeftNext;
         /*
         if (LeftNext != nullptr) {
@@ -1360,10 +2316,10 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
     }
     bool NeedAdjustAncestor = false;
     for (int i = 0; i < exchangeNum; i++) {
-        NodeForStree * LeftLeaf = wholeLeaf1[i];
-        NodeForStree * RightLeaf = wholeLeaf2[i];
-        NodeForStree * LeftParent = LeftLeaf->Parent;
-        NodeForStree * RightParent = RightLeaf->Parent;
+        NodeDA * LeftLeaf = wholeLeaf1[i];
+        NodeDA * RightLeaf = wholeLeaf2[i];
+        NodeDA * LeftParent = LeftLeaf->Parent;
+        NodeDA * RightParent = RightLeaf->Parent;
 
         exchangeLeaf(LeftLeaf, LeftParent, RightLeaf, RightParent);
         LeftEdgeLeaf = RightLeaf;
@@ -1391,9 +2347,9 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
     //delete leaves
     if (remain != 0) {
         //delete leaves without merging/redistribution/adjusting ancestor's keys
-        NodeForStree **  leafToDelete;
+        NodeDA **  leafToDelete;
         int numLeafToDelete ;
-        NodeForStree * pre = nullptr;
+        NodeDA * pre = nullptr;
         if (remain == -1) { // left leaves more
             numLeafToDelete = w1 - w2;
             leafToDelete = &wholeLeaf1[exchangeNum];
@@ -1403,29 +2359,27 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
             leafToDelete = &wholeLeaf2[exchangeNum];
             pre = wholeLeaf1[exchangeNum-1];
         }
+        //NodeDA * pre = findPrevious(leafToDelete[0]); // can be optimized
         if (pre != nullptr) {
             pre->Next = leafToDelete[numLeafToDelete-1]->Next;
         }
         /*
-        if (leafToDelete[0]->Previous != nullptr) {
-            leafToDelete[0]->Previous->Next = leafToDelete[numLeafToDelete-1]->Next;
-        }
         if (leafToDelete[numLeafToDelete-1]->Next != nullptr) {
             leafToDelete[numLeafToDelete-1]->Next->Previous = leafToDelete[0]->Previous;
         }
          */
         //only delete entries, no redistribution or merging
-        NodeForStree * preLeaf = deleteMulEntry(leafToDelete, numLeafToDelete);
+        NodeDA * preLeaf = deleteMulEntry(leafToDelete, numLeafToDelete);
         // adjust keys in ancestors
         CallRedistributeMergeRecomputeKeysInAncestorsLeftPart(preLeaf, leafToDelete, numLeafToDelete);
 
         // insert leaves
         if (remain == -1) { // left leaves more
-            NodeForStree * toParent = RightEdgeLeaf->Parent;
+            NodeDA * toParent = RightEdgeLeaf->Parent;
             int startIndexInParent = getIndexInParent(RightEdgeLeaf) + 1;
             insertLeavesIntoLeafParent(toParent, startIndexInParent, leafToDelete, numLeafToDelete);
         } else if (remain == 1) { // right leaves more
-            NodeForStree *  toParent = LeftEdgeLeaf->Parent;
+            NodeDA *  toParent = LeftEdgeLeaf->Parent;
             int startIndexInParent = getIndexInParent(LeftEdgeLeaf) + 1;
             insertLeavesIntoLeafParent(toParent, startIndexInParent, leafToDelete, numLeafToDelete);
         }
@@ -1433,7 +2387,7 @@ void DAstatic::swapWholeLeafAndGoUpwards(NodeForStree **wholeLeaf1, NodeForStree
 }
 
 
-void DAstatic::exchangeLeaf(NodeForStree * LeftLeaf, NodeForStree * LeftParent, NodeForStree * RightLeaf, NodeForStree * RightParent) const{
+void DynamicArray::exchangeLeaf(NodeDA * LeftLeaf, NodeDA * LeftParent, NodeDA * RightLeaf, NodeDA * RightParent){
     int index1 = -1, index2 = -1, key1 = -1, key2 = -1;
     for (int i = 0; i < Capacity; i++) {
         if (LeftParent->Pointers[i] == LeftLeaf) {
@@ -1458,20 +2412,24 @@ void DAstatic::exchangeLeaf(NodeForStree * LeftLeaf, NodeForStree * LeftParent, 
 }
 
 
-NodeForStree * DAstatic::movePointerAfter(NodeForStree * fromLeaf, int startIndex, int endIndex, NodeForStree * toLeaf, int toIndex) {
+
+NodeDA * DynamicArray::movePointerAfter(NodeDA * fromLeaf, int startIndex, int endIndex, NodeDA * toLeaf, int toIndex) {
     int * keysToInsert = new int[Capacity];
+    NodeDA ** pointersToInsert = new NodeDA *[Capacity];
     for (int i = startIndex; i <= endIndex; i++) {
         keysToInsert[i-startIndex] = fromLeaf->Keys[i];
+        pointersToInsert[i-startIndex] = fromLeaf->Pointers[i];
     }
     int numKeysToInsert = endIndex - startIndex + 1;
     //insert
-    insertKeysIntoLeaf(keysToInsert, numKeysToInsert, toLeaf, toIndex);
+    insertKeysIntoLeaf(keysToInsert, pointersToInsert, numKeysToInsert, toLeaf, toIndex);
 
     //delete
     int q = startIndex;
     int p = endIndex + 1;
     while (p < fromLeaf->NumOfKeys) {
         fromLeaf->Keys[q] = fromLeaf->Keys[p];
+        fromLeaf->Pointers[q] = fromLeaf->Pointers[p];
         p++;
         q++;
     }
@@ -1479,7 +2437,7 @@ NodeForStree * DAstatic::movePointerAfter(NodeForStree * fromLeaf, int startInde
     return adjustAfterDeleteKeysInNode(fromLeaf);
 }
 
-void DAstatic::insertLeavesIntoLeafParent(NodeForStree * toParent, int startIndexInParent, NodeForStree ** leafToInsert, int numLeafToInsert){
+void DynamicArray::insertLeavesIntoLeafParent(NodeDA * toParent, int startIndexInParent, NodeDA ** leafToInsert, int numLeafToInsert){
     if (toParent->NumOfKeys + numLeafToInsert <= Capacity) {
         insertMulLeavesIntoLeafParent(toParent, startIndexInParent, leafToInsert, numLeafToInsert);
     } else {
@@ -1489,8 +2447,8 @@ void DAstatic::insertLeavesIntoLeafParent(NodeForStree * toParent, int startInde
 
 
 // no need to split
-void DAstatic::insertMulLeavesIntoLeafParent(NodeForStree * toParent, int startIndexInParent, NodeForStree ** leafToInsert, int numLeafToInsert){
-    NodeForStree * last = leafToInsert[numLeafToInsert-1];
+void DynamicArray::insertMulLeavesIntoLeafParent(NodeDA * toParent, int startIndexInParent, NodeDA ** leafToInsert, int numLeafToInsert){
+    NodeDA * last = leafToInsert[numLeafToInsert-1];
     if (toParent->NumOfKeys == startIndexInParent){
         last->Next = toParent->Pointers[startIndexInParent-1]->Next;
         //leafToInsert[0]->Previous = toParent->Pointers[startIndexInParent-1];
@@ -1499,20 +2457,19 @@ void DAstatic::insertMulLeavesIntoLeafParent(NodeForStree * toParent, int startI
             last->Next->Previous = last;
         }
          */
-        NodeForStree * pre = toParent->Pointers[startIndexInParent-1];
+        NodeDA * pre = toParent->Pointers[startIndexInParent-1];
         if (pre != nullptr){
             pre->Next = leafToInsert[0];
         }
-
     } else {
         last->Next = toParent->Pointers[startIndexInParent];
+        //leafToInsert[0]->Previous = toParent->Pointers[startIndexInParent]->Previous;
         /*
-        leafToInsert[0]->Previous = toParent->Pointers[startIndexInParent]->Previous;
         if (last->Next != nullptr){
             last->Next->Previous = last;
         }
          */
-        NodeForStree * pre = findPrevious(toParent->Pointers[startIndexInParent]);
+        NodeDA * pre = findPrevious(toParent->Pointers[startIndexInParent]);
         if (pre != nullptr){
             pre->Next = leafToInsert[0];
         }
@@ -1545,12 +2502,13 @@ void DAstatic::insertMulLeavesIntoLeafParent(NodeForStree * toParent, int startI
         return;
     }
     AdjustAncestorKeyForOneNode(toParent);
+    return;
 }
 
 
-// adjust keys in ancestors of node c
-void DAstatic::AdjustAncestorKeyForOneNode(NodeForStree * c) {
-    NodeForStree * parent = c->Parent;
+// adjust keys in ancestors of NodeDA c
+void DynamicArray::AdjustAncestorKeyForOneNode(NodeDA * c) {
+    NodeDA * parent = c->Parent;
     int delta = -1;
     for (int i = 0; i < parent->NumOfKeys; i++){
         if (parent->Pointers[i] == c){
@@ -1578,13 +2536,13 @@ void DAstatic::AdjustAncestorKeyForOneNode(NodeForStree * c) {
 //toParent->NumOfKeys+numLeaf > Capacity
 //insert into toParent
 // need to adjust next, previous pointers before calling this function
-void DAstatic::insertMulLeavesIntoLeafParentSplitOnce(NodeForStree * toParent, int startIndexInParent,
-                                                      NodeForStree ** leafToInsert, int numLeafToInsert) {
+void DynamicArray::insertMulLeavesIntoLeafParentSplitOnce(NodeDA * toParent, int startIndexInParent,
+                                                          NodeDA ** leafToInsert, int numLeafToInsert) {
     int allNum = toParent->NumOfKeys + numLeafToInsert;
     int leftNum = allNum / 2;
     int rightNum = allNum - leftNum;
     int leftSum = 0, rightSum = 0;
-    NodeForStree ** allLeaf = new NodeForStree*[Capacity + numLeafToInsert];
+    NodeDA ** allLeaf = new NodeDA *[Capacity + numLeafToInsert];
     int * allKeys = new int[Capacity + numLeafToInsert];
     int j = 0;
     for (int i = 0; i < startIndexInParent; i++) {
@@ -1611,7 +2569,7 @@ void DAstatic::insertMulLeavesIntoLeafParentSplitOnce(NodeForStree * toParent, i
         s++;
     }
     toParent->NumOfKeys = leftNum;
-    NodeForStree * newn = new NodeForStree(Capacity);
+    NodeDA * newn = new NodeDA(Capacity);
     for (int l = 0; l < rightNum; ++l) {
         newn->Pointers[l] = allLeaf[s];
         newn->Pointers[l]->Parent = newn;
@@ -1625,10 +2583,10 @@ void DAstatic::insertMulLeavesIntoLeafParentSplitOnce(NodeForStree * toParent, i
 
 
 //may split more than once
-void DAstatic::insertMulLeavesIntoLeafParentAfterSplitting(NodeForStree * toParent, int startIndexInParent,
-                                                           NodeForStree ** leafToInsert, int numLeafToInsert) {
+void DynamicArray::insertMulLeavesIntoLeafParentAfterSplitting(NodeDA * toParent, int startIndexInParent,
+                                                               NodeDA ** leafToInsert, int numLeafToInsert) {
     //next, previous
-    NodeForStree * last = leafToInsert[numLeafToInsert-1];
+    NodeDA * last = leafToInsert[numLeafToInsert-1];
     if (toParent->NumOfKeys == startIndexInParent) {
         last->Next = toParent->Pointers[startIndexInParent-1]->Next;
         /*
@@ -1637,11 +2595,10 @@ void DAstatic::insertMulLeavesIntoLeafParentAfterSplitting(NodeForStree * toPare
             last->Next->Previous = last;
         }
          */
-        NodeForStree * pre = toParent->Pointers[startIndexInParent-1];
+        NodeDA * pre = toParent->Pointers[startIndexInParent-1];
         if (pre != nullptr) {
             pre->Next = leafToInsert[0];
         }
-
     } else {
         last->Next = toParent->Pointers[startIndexInParent];
         /*
@@ -1649,8 +2606,8 @@ void DAstatic::insertMulLeavesIntoLeafParentAfterSplitting(NodeForStree * toPare
         if (last->Next != nullptr) {
             last->Next->Previous = last;
         }
-        */
-        NodeForStree * pre = toParent->Pointers[startIndexInParent-1];
+         */
+        NodeDA * pre = findPrevious(toParent->Pointers[startIndexInParent]);
         if (pre != nullptr) {
             pre->Next = leafToInsert[0];
         }
@@ -1665,7 +2622,7 @@ void DAstatic::insertMulLeavesIntoLeafParentAfterSplitting(NodeForStree * toPare
 
     //set pointers after startIndexInParent in toParent
     int numToParentAfterInsert = toParent->NumOfKeys - startIndexInParent;
-    NodeForStree ** leafInToParentTail = new NodeForStree*[numToParentAfterInsert];
+    NodeDA ** leafInToParentTail = new NodeDA *[numToParentAfterInsert];
     for (int k = startIndexInParent; k < toParent->NumOfKeys; ++k) {
         leafInToParentTail[k-startIndexInParent] = toParent->Pointers[k];
         toParent->Pointers[k] = leafToInsert[k-startIndexInParent];
@@ -1686,11 +2643,11 @@ void DAstatic::insertMulLeavesIntoLeafParentAfterSplitting(NodeForStree * toPare
         numInSecondLast = (remainNumLeaf + Capacity)/2;
         numInLast = remainNumLeaf + Capacity - numInSecondLast;
     }
-    NodeForStree ** parentNewSibling = new NodeForStree*[parentNewSiblingNum];
+    NodeDA ** parentNewSibling = new NodeDA *[parentNewSiblingNum];
     int LeafToInsertIdx = numToParentAfterInsert;
     int leafInToParentTailIdx = 0;
     for (int k = 0; k < parentNewSiblingNum; ++k) {
-        parentNewSibling[k] = new NodeForStree(Capacity);
+        parentNewSibling[k] = new NodeDA(Capacity);
         if (k == parentNewSiblingNum - 1) {// the last one
             for (int y = 0; y < numInLast; y++) {
                 if (LeafToInsertIdx == numLeafToInsert) {
@@ -1735,8 +2692,8 @@ void DAstatic::insertMulLeavesIntoLeafParentAfterSplitting(NodeForStree * toPare
     delete []leafInToParentTail;
 }
 
-void DAstatic::insertMulIntoParent(NodeForStree * toParent, NodeForStree ** parentNewSibling, int parentNewSiblingNum) {
-    NodeForStree * parent = toParent->Parent;
+void DynamicArray::insertMulIntoParent(NodeDA * toParent, NodeDA ** parentNewSibling, int parentNewSiblingNum) {
+    NodeDA * parent = toParent->Parent;
     if (parent == nullptr) {
         insertMulIntoNewRoot(toParent, parentNewSibling, parentNewSiblingNum);
         return;
@@ -1761,9 +2718,9 @@ void DAstatic::insertMulIntoParent(NodeForStree * toParent, NodeForStree ** pare
     }
 }
 
-void DAstatic::insertMulIntoNodeAfterSplitting(NodeForStree * parent, int toIndex, NodeForStree** pointerToInsert,
-                                               int pointerToInsertNum) {
-    NodeForStree ** allPointers = new NodeForStree*[Capacity + pointerToInsertNum];
+void DynamicArray::insertMulIntoNodeAfterSplitting(NodeDA * parent, int toIndex, NodeDA ** pointerToInsert,
+                                                   int pointerToInsertNum) {
+    NodeDA ** allPointers = new NodeDA *[Capacity + pointerToInsertNum];
     int j = 0;
     for (int i = 0; i < toIndex; i++) {
         allPointers[j] = parent->Pointers[i];
@@ -1795,9 +2752,9 @@ void DAstatic::insertMulIntoNodeAfterSplitting(NodeForStree * parent, int toInde
         if (remainNumLeaf != 0) {
             parentNewSiblingNum++;
         }
-        NodeForStree ** parentNewSibling = new NodeForStree*[parentNewSiblingNum];
+        NodeDA ** parentNewSibling = new NodeDA *[parentNewSiblingNum];
         for (int k = 0; k < parentNewSiblingNum; k++) {
-            parentNewSibling[k] = new NodeForStree(Capacity);
+            parentNewSibling[k] = new NodeDA(Capacity);
             for (int y = 0; y < Capacity; y++) {
                 parentNewSibling[k]->Pointers[y] = allPointers[i];
                 parentNewSibling[k]->Keys[y] = NodeSumKeys(allPointers[i]); //allPointers[i]->NumOfKeys
@@ -1842,9 +2799,9 @@ void DAstatic::insertMulIntoNodeAfterSplitting(NodeForStree * parent, int toInde
             }
         }
         //set parent's new siblings
-        NodeForStree **parentNewSibling = new NodeForStree*[parentNewSiblingNum];
+        NodeDA **parentNewSibling = new NodeDA *[parentNewSiblingNum];
         for (int k = 0; k < parentNewSiblingNum; k++) {
-            parentNewSibling[k] = new NodeForStree(Capacity);
+            parentNewSibling[k] = new NodeDA(Capacity);
             if (k == parentNewSiblingNum-1) { // the last one
                 for (int y = 0; y < numkeysInLastParent; y++) {
                     parentNewSibling[k]->Pointers[y] = allPointers[i_allpointer];
@@ -1887,9 +2844,9 @@ void DAstatic::insertMulIntoNodeAfterSplitting(NodeForStree * parent, int toInde
     delete []allPointers;
 }
 
-void DAstatic::insertMulIntoNode(NodeForStree * parent, int toIndex, NodeForStree** parentNewSibling,
-                                 int parentNewSiblingNum, int ParentIncrease) const {
-    NodeForStree ** tmpNodes = new NodeForStree*[Capacity];
+void DynamicArray::insertMulIntoNode(NodeDA * parent, int toIndex, NodeDA ** parentNewSibling,
+                                     int parentNewSiblingNum, int ParentIncrease) {
+    NodeDA ** tmpNodes = new NodeDA *[Capacity];
     int i = toIndex;
     int i_tmpNodes = 0;
     for (int j = 0; j < parentNewSiblingNum; j++) {
@@ -1913,7 +2870,7 @@ void DAstatic::insertMulIntoNode(NodeForStree * parent, int toIndex, NodeForStre
             break;
         }
     }
-    NodeForStree * c = parent;
+    NodeDA * c = parent;
     parent = c->Parent;
     while (parent != nullptr ){
         for (i = 0; i < parent->NumOfKeys; i++) {
@@ -1928,11 +2885,11 @@ void DAstatic::insertMulIntoNode(NodeForStree * parent, int toIndex, NodeForStre
 }
 
 
-void DAstatic::insertMulIntoNewRoot(NodeForStree * toParent, NodeForStree ** parentNewSibling, int parentNewSiblingNum) {
+void DynamicArray::insertMulIntoNewRoot(NodeDA * toParent, NodeDA ** parentNewSibling, int parentNewSiblingNum) {
     int totalNum = parentNewSiblingNum + 1;
     int numFullNodes = totalNum / Capacity;
     if ((numFullNodes == 0) || (totalNum == Capacity)) { // new root!
-        Root = new NodeForStree(Capacity);
+        Root = new NodeDA(Capacity);
         Root->NumOfKeys = parentNewSiblingNum + 1;
         Root->Keys[0] = NodeSumKeys(toParent);
         Root->Pointers[0] = toParent;
@@ -1945,9 +2902,9 @@ void DAstatic::insertMulIntoNewRoot(NodeForStree * toParent, NodeForStree ** par
         return;
     }
     if (totalNum%Capacity == 0) { //all full nodes
-        NodeForStree * leftNode = new NodeForStree(Capacity);
+        NodeDA * leftNode = new NodeDA(Capacity);
         int rightSiblingNum = numFullNodes - 1;
-        NodeForStree ** rightSibling = new NodeForStree*[rightSiblingNum];
+        NodeDA ** rightSibling = new NodeDA *[rightSiblingNum];
         int i_rightchild = 0;
         // set keys/pointers in leftNode
         leftNode->Pointers[0] = toParent;
@@ -1962,7 +2919,7 @@ void DAstatic::insertMulIntoNewRoot(NodeForStree * toParent, NodeForStree ** par
             i_rightchild++;
         }
         for (int i = 0; i < rightSiblingNum; i++) {
-            rightSibling[i] = new NodeForStree(Capacity);
+            rightSibling[i] = new NodeDA(Capacity);
             for (int j = 0; j < Capacity; j++) {
                 rightSibling[i]->Pointers[j] = parentNewSibling[i_rightchild];
                 rightSibling[i]->Keys[j] = NodeSumKeys(parentNewSibling[i_rightchild]);
@@ -1974,14 +2931,14 @@ void DAstatic::insertMulIntoNewRoot(NodeForStree * toParent, NodeForStree ** par
         insertMulIntoNewRoot(leftNode, rightSibling, rightSiblingNum);
         delete []rightSibling;
     } else { // not all full nodes
-        NodeForStree * leftNode = new NodeForStree(Capacity);
+        NodeDA * leftNode = new NodeDA(Capacity);
         leftNode->Pointers[0] = toParent;
         leftNode->Keys[0] = NodeSumKeys(toParent);
         leftNode->NumOfKeys = 1;
         toParent->Parent = leftNode;
         int rightSiblingNum = numFullNodes;
         numFullNodes--;
-        NodeForStree ** rightSibling = new NodeForStree*[rightSiblingNum];
+        NodeDA ** rightSibling = new NodeDA *[rightSiblingNum];
         int i_rightchild = 0;
         int remainer = totalNum % Capacity;
         int min_keys = Min;
@@ -2001,7 +2958,7 @@ void DAstatic::insertMulIntoNewRoot(NodeForStree * toParent, NodeForStree ** par
                 i_rightchild++;
             }
             leftNode->NumOfKeys = numkeysInSecondLast;
-            rightSibling[0] = new NodeForStree(Capacity);
+            rightSibling[0] = new NodeDA(Capacity);
             for (int i = 0; i < numkeysInLast; i++) {
                 rightSibling[0]->Pointers[i] = parentNewSibling[i_rightchild];
                 rightSibling[0]->Keys[i] = NodeSumKeys(parentNewSibling[i_rightchild]);
@@ -2009,7 +2966,7 @@ void DAstatic::insertMulIntoNewRoot(NodeForStree * toParent, NodeForStree ** par
                 i_rightchild++;
             }
             rightSibling[0]->NumOfKeys = numkeysInLast;
-        } else { // leftnode is not the second last one
+        } else { // leftNode is not the second last one
             for (int i = 1; i < Capacity; i++) { // leftNode
                 leftNode->Pointers[i] = parentNewSibling[i_rightchild];
                 leftNode->Keys[i] = parentNewSibling[i_rightchild]->NumOfKeys;
@@ -2018,7 +2975,7 @@ void DAstatic::insertMulIntoNewRoot(NodeForStree * toParent, NodeForStree ** par
             }
             leftNode->NumOfKeys = Capacity;
             for (int k = 0; k < rightSiblingNum; k++) {
-                rightSibling[k] = new NodeForStree(Capacity);
+                rightSibling[k] = new NodeDA(Capacity);
                 if (k == rightSiblingNum-1) { // the last one
                     for (int y = 0; y < numkeysInLast; y++) {
                         rightSibling[k]->Pointers[y] = parentNewSibling[i_rightchild];
@@ -2052,13 +3009,15 @@ void DAstatic::insertMulIntoNewRoot(NodeForStree * toParent, NodeForStree ** par
 }
 
 
-NodeForStree * DAstatic::movePointerBefore(NodeForStree * fromLeaf, int startIndex, int endIndex, NodeForStree * toLeaf, int toIndex) {
+NodeDA * DynamicArray::movePointerBefore(NodeDA * fromLeaf, int startIndex, int endIndex, NodeDA * toLeaf, int toIndex) {
     int * keysToInsert = new int[Capacity];
+    NodeDA ** pointersToInsert = new NodeDA *[Capacity];
     for (int i= startIndex; i <= endIndex; i++) {
         keysToInsert[i-startIndex] = fromLeaf->Keys[i];
+        pointersToInsert[i-startIndex] = fromLeaf->Pointers[i];
     }
     int numKeysToInsert = endIndex - startIndex + 1;
-    insertKeysIntoLeaf(keysToInsert, numKeysToInsert, toLeaf, toIndex);
+    insertKeysIntoLeaf(keysToInsert, pointersToInsert, numKeysToInsert, toLeaf, toIndex);
 
     //delete
     for (int i = endIndex + 1; i < fromLeaf->NumOfKeys; i++) {
@@ -2067,16 +3026,61 @@ NodeForStree * DAstatic::movePointerBefore(NodeForStree * fromLeaf, int startInd
     }
     fromLeaf->NumOfKeys -= numKeysToInsert;
     delete []keysToInsert;
+    delete []pointersToInsert;
     return adjustAfterDeleteKeysInNode(fromLeaf);
 }
 
-void DAstatic::AdjustAncestorKeysAccordingToCurNode(NodeForStree * n) const {
+void DynamicArray::UpdateSumKeys(NodeDA ** nodes, int numNode) {
+    if (nodes[0] == Root) {
+        return;
+    }
+    if (numNode == 1) {
+        AdjustAncestorKeysAccordingToCurNode(nodes[0]);
+        return;
+    }
+    NodeDA ** newArray = new NodeDA *[numNode];// make([]*Node, numNode)
+    int numNewArray = 0;
+
+    NodeDA * lastParent = nullptr, * parent = nullptr;
+    int index = - 1, i = -1;
+    for (i = 0; i < numNode; i ++) {
+        if (nodes[i]->NumOfKeys > 0) {
+            index = getIndexInParent(nodes[i]);
+            lastParent = nodes[i]->Parent;
+            newArray[i] = lastParent;
+            numNewArray++;
+            //    lastParent.Keys[index] = t.NodeSumKeys(nodes[i])
+            break;
+        }
+    }
+    for (; i < numNode; i ++) {
+        if (nodes[i]->NumOfKeys == 0) {
+            continue;
+        }
+        parent = nodes[i]->Parent;
+        if (lastParent != parent) {
+            newArray[numNewArray] = parent;
+            lastParent = parent;
+            numNewArray++;
+            index = 0;
+        }
+        parent->Keys[index] = NodeSumKeys(nodes[i]);
+        index ++;
+    }
+    if (numNewArray > 0) {
+        UpdateSumKeys(newArray, numNewArray);
+    }
+    delete []newArray;
+}
+
+
+void DynamicArray::AdjustAncestorKeysAccordingToCurNode(NodeDA * n) {
     if (n->Parent == nullptr || n == Root) {
         return;
     }
     int delta = 0;
-    NodeForStree * c = n;
-    NodeForStree * parent = c->Parent;
+    NodeDA * c = n;
+    NodeDA * parent = c->Parent;
     for (int i = 0; i < parent->NumOfKeys; i++) {
         if (parent->Pointers[i] == c) {
             int x = NodeSumKeys(c);
@@ -2102,12 +3106,12 @@ void DAstatic::AdjustAncestorKeysAccordingToCurNode(NodeForStree * n) const {
 }
 
 
-void DAstatic::SimplyAdjustAncestorKeysBy(NodeForStree * node, int increase) const {
+void DynamicArray::SimplyAdjustAncestorKeysBy(NodeDA * node, int increase) {
     if (node == Root) {
         return;
     }
-    NodeForStree * c = node;
-    NodeForStree * parent = c->Parent;
+    NodeDA * c = node;
+    NodeDA * parent = c->Parent;
     while (parent != nullptr) {
         for (int i = 0; i < parent->NumOfKeys; ++i) {
             if (parent->Pointers[i] == c) {
@@ -2120,10 +3124,10 @@ void DAstatic::SimplyAdjustAncestorKeysBy(NodeForStree * node, int increase) con
     }
 }
 
-NodeForStree * DAstatic::CompleteAdjustAncestorNodesAfterDelete(NodeForStree * n){
+NodeDA * DynamicArray::CompleteAdjustAncestorNodesAfterDelete(NodeDA * n){
     if (n->NumOfKeys < Min) {
-        NodeForStree * re = nullptr;
-        NodeForStree * neighbour ;
+        NodeDA * re = nullptr;
+        NodeDA * neighbour ;
         int neighbour_index = getLeftNeighborIndex(n);
         if (neighbour_index == -1) {
             neighbour = n->Parent->Pointers[1];
@@ -2142,7 +3146,7 @@ NodeForStree * DAstatic::CompleteAdjustAncestorNodesAfterDelete(NodeForStree * n
     }
 }
 
-void DAstatic::replaceKeysInLeaf(NodeForStree * leaf, int startIdx, int endIdx, int * keysToInsert, int numToInsert) {
+void DynamicArray::replaceKeysInLeaf(NodeDA * leaf, int startIdx, int endIdx, int * keysToInsert, NodeDA ** pointersToInsert, int numToInsert) {
     int numInLeaf = endIdx-startIdx+1;
     int exchange = numInLeaf;
     if (exchange > numToInsert) {
@@ -2150,12 +3154,13 @@ void DAstatic::replaceKeysInLeaf(NodeForStree * leaf, int startIdx, int endIdx, 
     }
     for (int i = 0; i < exchange; ++i) {
         leaf->Keys[i+startIdx] = keysToInsert[i];
+        leaf->Pointers[i+startIdx] = pointersToInsert[i];
     }
     if (numInLeaf == numToInsert) {
         AdjustAncestorKeysAccordingToCurNode(leaf);
         return;
     } else if (numInLeaf < numToInsert) {
-        insertKeysIntoLeaf(&keysToInsert[exchange], numToInsert-exchange, leaf, endIdx+1);
+        insertKeysIntoLeaf(&keysToInsert[exchange], &pointersToInsert[exchange], numToInsert-exchange, leaf, endIdx+1);
         return;
     } else { // numInLeaf > numToInsert
         movePointerInNodeForward(leaf, endIdx+1, leaf->NumOfKeys-1, startIdx+exchange);
@@ -2170,9 +3175,9 @@ void DAstatic::replaceKeysInLeaf(NodeForStree * leaf, int startIdx, int endIdx, 
 //n->NumOfKeys = startIndex ----1
 //insertKeysIntoLeaf() ----2
 //maybe after inserting, n->NumOfKeys < Min
-void DAstatic::CheckAndMergeRedistributeNode(NodeForStree *n) {
+void DynamicArray::CheckAndMergeRedistributeNode(NodeDA *n) {
     if (n->NumOfKeys < Min) {
-        NodeForStree * neighbour ;
+        NodeDA * neighbour ;
         int neighbour_index = getLeftNeighborIndex(n);
         if (neighbour_index == -1) {
             neighbour = n->Parent->Pointers[1];
@@ -2188,9 +3193,10 @@ void DAstatic::CheckAndMergeRedistributeNode(NodeForStree *n) {
 }
 
 
-//adjust from this node to root, and then redistribute/merge
+
+//adjust from this NodeDA to root, and then redistribute/merge
 //numKeysDeleted = -1 if omitted
-NodeForStree * DAstatic::adjustAfterDeleteKeysInNode(NodeForStree * fromLeaf, int numKeysDeleted) {
+NodeDA * DynamicArray::adjustAfterDeleteKeysInNode(NodeDA * fromLeaf, int numKeysDeleted) {
     if (fromLeaf == Root) {
         adjustRoot();
         return nullptr;
@@ -2204,7 +3210,7 @@ NodeForStree * DAstatic::adjustAfterDeleteKeysInNode(NodeForStree * fromLeaf, in
         return nullptr;
     } else {
         int neighbour_index = getLeftNeighborIndex(fromLeaf);
-        NodeForStree * neighbour;
+        NodeDA * neighbour;
         if (neighbour_index == -1) {
             neighbour = fromLeaf->Parent->Pointers[1];
         } else {
@@ -2220,35 +3226,20 @@ NodeForStree * DAstatic::adjustAfterDeleteKeysInNode(NodeForStree * fromLeaf, in
 }
 
 
-NodeForStree* DAstatic::findPrevious(NodeForStree * node) {
-    if (node == Root || node->Parent == nullptr) {
-        return nullptr;
-    }
-    int idxInParent = getIndexInParent(node);
-    if (idxInParent > 0) {
-        NodeForStree * cur = node->Parent->Pointers[idxInParent-1];
-        while (!cur->IsLeaf) {
-            cur = cur->Pointers[cur->NumOfKeys-1];
-        }
-        return cur;
-    } else {
-        return findPrevious(node->Parent);
-    }
-}
-
 //only delete entries, no redistribution or merging
-NodeForStree * DAstatic::deleteMulEntry(NodeForStree ** entryToDelete, int numEntryToDelete){
-    NodeForStree * pre = findPrevious(entryToDelete[0]);
-    NodeForStree ** newEntryToDelete = new NodeForStree*[numEntryToDelete/Min+2];
+// return previous of the first deleted leaf
+NodeDA * DynamicArray::deleteMulEntry(NodeDA ** entryToDelete, int numEntryToDelete){
+    NodeDA * pre = findPrevious(entryToDelete[0]);
+    NodeDA ** newEntryToDelete = new NodeDA *[numEntryToDelete/Min+2];
     int i_newEntryToDelete = 0;
-    NodeForStree * lastParent = entryToDelete[0]->Parent;
-    NodeForStree * FirstParent = lastParent;
+    NodeDA * lastParent = entryToDelete[0]->Parent;
+    NodeDA * FirstParent = lastParent;
     int StartIndexFirstParent = getIndexInParent(entryToDelete[0]);
-    NodeForStree * curParent = nullptr;
+    NodeDA * curParent = nullptr;
     int OldNumKeysInCurParent = FirstParent->NumOfKeys;
 
     for (int i = 0; i < numEntryToDelete; i++) {
-        NodeForStree * curEntry = entryToDelete[i];
+        NodeDA * curEntry = entryToDelete[i];
         curParent = curEntry->Parent;
         curParent->NumOfKeys--;
         if (curParent != lastParent) {
@@ -2287,7 +3278,7 @@ NodeForStree * DAstatic::deleteMulEntry(NodeForStree ** entryToDelete, int numEn
 
 
 //move pointers forward without changing NumOfKeys
-void DAstatic::movePointerInNodeForward(NodeForStree * node, int startIndex, int endIndex, int toIndex){
+void DynamicArray::movePointerInNodeForward(NodeDA * node, int startIndex, int endIndex, int toIndex){
     int delta = startIndex - toIndex;
     for (int i = startIndex; i <= endIndex; i++) {
         node->Keys[i-delta] = node->Keys[i];
@@ -2297,7 +3288,7 @@ void DAstatic::movePointerInNodeForward(NodeForStree * node, int startIndex, int
 
 
 // call this function after deleting a continuous range of leaves
-void DAstatic::RedistributeMergeRecomputeKeysInAncestorsLeftPart(NodeForStree * node) {
+void DynamicArray::RedistributeMergeRecomputeKeysInAncestorsLeftPart(NodeDA * node) {
     if (node == nullptr) {
         return;
     }
@@ -2308,7 +3299,7 @@ void DAstatic::RedistributeMergeRecomputeKeysInAncestorsLeftPart(NodeForStree * 
     }
     if (node == Root) {
         if (node->NumOfKeys == 1) {
-            NodeForStree *newroot = node->Pointers[0];
+            NodeDA *newroot = node->Pointers[0];
             newroot->Parent = nullptr;
             Root = newroot;
         }
@@ -2318,9 +3309,9 @@ void DAstatic::RedistributeMergeRecomputeKeysInAncestorsLeftPart(NodeForStree * 
         printf("impossible! In RedistributeMergeRecomputeKeysInAncestorsLeftPart, node->NumOfKeys=0\n");
         return;
     }
-    NodeForStree * parent = node->Parent;
+    NodeDA * parent = node->Parent;
     int index = getIndexInParent(node);
-    NodeForStree * neighbour;
+    NodeDA * neighbour;
     parent->Keys[index] = NodeSumKeys(node);
     if (node->NumOfKeys >= Min) {
         RedistributeMergeRecomputeKeysInAncestorsLeftPart(parent);
@@ -2352,17 +3343,17 @@ void DAstatic::RedistributeMergeRecomputeKeysInAncestorsLeftPart(NodeForStree * 
 }
 
 
-void DAstatic::adjustAncestorKeysAfterExchangingLeaves(NodeForStree ** nodeArray, int numNodeInArray) {
+void DynamicArray::adjustAncestorKeysAfterExchangingLeaves(NodeDA ** nodeArray, int numNodeInArray) {
     if (nodeArray[0]->Parent == nullptr) {
-        NodeForStree * root = nodeArray[0];
+        NodeDA * root = nodeArray[0];
         for (int i = 0; i < root->NumOfKeys; i++) {
             root->Keys[i] = NodeSumKeys(root->Pointers[i]);
         }
         return; //root
     }
-    NodeForStree ** newArray = new NodeForStree *[numNodeInArray];
+    NodeDA ** newArray = new NodeDA *[numNodeInArray];
     int numNewArray = 0;
-    NodeForStree * lastParent = nullptr, * parent = nullptr;
+    NodeDA * lastParent = nullptr, * parent = nullptr;
     lastParent = nullptr;
     for (int i = 0; i < numNodeInArray; i++) {
         parent = nodeArray[i]->Parent;
@@ -2371,7 +3362,7 @@ void DAstatic::adjustAncestorKeysAfterExchangingLeaves(NodeForStree ** nodeArray
             lastParent = parent;
             numNewArray++;
         }
-        NodeForStree * cur = nodeArray[i];
+        NodeDA * cur = nodeArray[i];
         for (int j = 0; j < cur->NumOfKeys; j++) {
             cur->Keys[j] = NodeSumKeys(cur->Pointers[j]);
         }
@@ -2389,305 +3380,397 @@ void DAstatic::adjustAncestorKeysAfterExchangingLeaves(NodeForStree ** nodeArray
 }
 
 
-void DAstatic::swapHeadTail11(NodeForStree * inter1, int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2,
-                              int endIndexLeaf2) {
+void DynamicArray::swapHeadTail11(NodeDA * inter1, int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2,
+                                  int endIndexLeaf2) {
 
     int num = endIndexLeaf2 - startIndexLeaf1 + 1;
     int * Keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int ik = 0;
     for (int i = startIndexLeaf2; i <= endIndexLeaf2; i++) {
         Keys[ik] = inter1->Keys[i];
+        Pointers[ik] = inter1->Pointers[i];
         ik++;
     }
     for (int i = endIndexLeaf1 + 1; i < startIndexLeaf2; i++) {
         Keys[ik] = inter1->Keys[i];
+        Pointers[ik] = inter1->Pointers[i];
         ik++;
     }
     for (int i = startIndexLeaf1; i <= endIndexLeaf1; i++) {
         Keys[ik] = inter1->Keys[i];
+        Pointers[ik] = inter1->Pointers[i];
         ik++;
     }
     int jk = 0;
     for (int i = startIndexLeaf1; i <= endIndexLeaf2; i++) {
         inter1->Keys[i] = Keys[jk];
+        inter1->Pointers[i] = Pointers[jk];
         jk++;
     }
+    NodeDA ** nodes = new NodeDA *[1];
+    nodes[0] = inter1;
+    UpdateSumKeys(nodes, 1);
+    delete []nodes;
     delete []Keys;
+    delete []Pointers;
 }
 
 
-void DAstatic::swapHeadTail12(NodeForStree * inter1, NodeForStree * inter2, int startIndexLeaf1, int endIndexLeaf1,
-                              int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::swapHeadTail12(NodeDA * inter1, NodeDA * inter2, int startIndexLeaf1, int endIndexLeaf1,
+                                  int startIndexLeaf2, int endIndexLeaf2) {
     int num =  endIndexLeaf2 + 1 + inter1->NumOfKeys-startIndexLeaf1;
     int * Keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int  ik = 0;
     for (int i = startIndexLeaf2; i < inter1->NumOfKeys; i++) {
         Keys[ik] = inter1->Keys[i];
+        Pointers[ik] = inter1->Pointers[i];
         ik++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         Keys[ik] = inter2->Keys[i];
+        Pointers[ik] = inter2->Pointers[i];
         ik++;
     }
     for (int i = endIndexLeaf1 + 1; i < startIndexLeaf2; i++) {
         Keys[ik] = inter1->Keys[i];
+        Pointers[ik] = inter1->Pointers[i];
         ik++;
     }
     for (int i = startIndexLeaf1; i <= endIndexLeaf1; i++) {
         Keys[ik] = inter1->Keys[i];
+        Pointers[ik] = inter1->Pointers[i];
         ik++;
     }
     int jk = 0;
     for (int i = startIndexLeaf1; i < inter1->NumOfKeys; i++) {
         inter1->Keys[i] = Keys[jk];
+        inter1->Pointers[i] = Pointers[jk];
         jk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         inter2->Keys[i] = Keys[jk];
+        inter2->Pointers[i] = Pointers[jk];
         jk++;
     }
+    NodeDA ** nodes = new NodeDA *[2];
+    nodes[0] = inter1;
+    nodes[1] = inter2;
+    UpdateSumKeys(nodes, 2);
+    delete []nodes;
     delete []Keys;
+    delete []Pointers;
 }
 
 
-void DAstatic::swapHeadTail21(NodeForStree * inter1, NodeForStree * inter2, int startIndexLeaf1, int endIndexLeaf1,
-                              int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::swapHeadTail21(NodeDA * inter1, NodeDA * inter2, int startIndexLeaf1, int endIndexLeaf1,
+                                  int startIndexLeaf2, int endIndexLeaf2) {
     int num =  endIndexLeaf2 + 1 + inter1->NumOfKeys-startIndexLeaf1;
     int * Keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int ik = 0;
     for (int i = startIndexLeaf2; i <= endIndexLeaf2; i++) {
         Keys[ik] = inter2->Keys[i];
+        Pointers[ik] = inter2->Pointers[i];
         ik++;
     }
     for (int i = endIndexLeaf1 + 1; i < startIndexLeaf2; i++) {
         Keys[ik] = inter2->Keys[i];
+        Pointers[ik] = inter2->Pointers[i];
         ik++;
     }
     for (int i = startIndexLeaf1; i < inter1->NumOfKeys; i++) {
         Keys[ik] = inter1->Keys[i];
+        Pointers[ik] = inter1->Pointers[i];
         ik++;
     }
     for (int i = 0; i <= endIndexLeaf1; i++) {
         Keys[ik] = inter2->Keys[i];
+        Pointers[ik] = inter2->Pointers[i];
         ik++;
     }
     int jk = 0;
     for (int i = startIndexLeaf1; i < inter1->NumOfKeys; i++) {
         inter1->Keys[i] = Keys[jk];
+        inter1->Pointers[i] = Pointers[jk];
         jk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         inter2->Keys[i] = Keys[jk];
+        inter2->Pointers[i] = Pointers[jk];
         jk++;
     }
+    NodeDA ** nodes = new NodeDA *[2];
+    nodes[0] = inter1;
+    nodes[1] = inter2;
+    UpdateSumKeys(nodes, 2);
+    delete []nodes;
     delete []Keys;
+    delete []Pointers;
 }
 
 
-void DAstatic::swapHeadTail22(NodeForStree * inter1, NodeForStree * inter2, NodeForStree * inter3, int startIndexLeaf1,
-                              int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::swapHeadTail22(NodeDA * inter1, NodeDA * inter2, NodeDA * inter3, int startIndexLeaf1,
+                                  int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int num =  endIndexLeaf2+1 + inter2->NumOfKeys + inter1->NumOfKeys-startIndexLeaf1;
     int * Keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int ik = 0;
     for (int i = startIndexLeaf2; i < inter2->NumOfKeys; i++) {
         Keys[ik] = inter2->Keys[i];
+        Pointers[ik] = inter2->Pointers[i];
         ik++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         Keys[ik] = inter3->Keys[i];
+        Pointers[ik] = inter3->Pointers[i];
         ik++;
     }
     for (int i = endIndexLeaf1 + 1; i < startIndexLeaf2; i++) {
         Keys[ik] = inter2->Keys[i];
+        Pointers[ik] = inter2->Pointers[i];
         ik++;
     }
     for (int i = startIndexLeaf1; i < inter1->NumOfKeys; i++) {
         Keys[ik] = inter1->Keys[i];
+        Pointers[ik] = inter1->Pointers[i];
         ik++;
     }
     for (int i = 0; i <= endIndexLeaf1; i++) {
         Keys[ik] = inter2->Keys[i];
+        Pointers[ik] = inter2->Pointers[i];
         ik++;
     }
 
     int jk = 0;
     for (int i = startIndexLeaf1; i < inter1->NumOfKeys; i++) {
         inter1->Keys[i] = Keys[jk];
+        inter1->Pointers[i] = Pointers[jk];
         jk++;
     }
     for (int i = 0; i < inter2->NumOfKeys; i++) {
         inter2->Keys[i] = Keys[jk];
+        inter2->Pointers[i] = Pointers[jk];
         jk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         inter3->Keys[i] = Keys[jk];
+        inter3->Pointers[i] = Pointers[jk];
         jk++;
     }
+    NodeDA ** nodes = new NodeDA *[3];
+    nodes[0] = inter1;
+    nodes[1] = inter2;
+    nodes[2] = inter3;
+    UpdateSumKeys(nodes, 3);
+    delete []nodes;
     delete []Keys;
+    delete []Pointers;
 }
 
 
-void DAstatic::swapHeadTailLen1Is1(NodeForStree **inter2, int numLeaf2, int startIndexLeaf1,
-                                   int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::swapHeadTailLen1Is1(NodeDA **inter2, int numLeaf2, int startIndexLeaf1,
+                                       int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int NumToMove = startIndexLeaf2 - startIndexLeaf1;
     int* KeysToMove = new int[NumToMove];
+    NodeDA ** Pointers = new NodeDA *[NumToMove];
     int ik = 0;
     for (int i = endIndexLeaf1 + 1; i < startIndexLeaf2; i++) {
         KeysToMove[ik] = inter2[0]->Keys[i];
+        Pointers[ik] = inter2[0]->Pointers[i];
         ik++;
     }
     for (int i = startIndexLeaf1; i <= endIndexLeaf1; i++) {
         KeysToMove[ik] = inter2[0]->Keys[i];
+        Pointers[ik] = inter2[0]->Pointers[i];
         ik++;
     }
     for (int i = startIndexLeaf1; i < inter2[0]->NumOfKeys-NumToMove; i++) {
         inter2[0]->Keys[i] = inter2[0]->Keys[i+NumToMove];
+        inter2[0]->Pointers[i] = inter2[0]->Pointers[i+NumToMove];
     }
     inter2[0]->NumOfKeys -= NumToMove;
     CompleteAdjustAncestorNodesAfterDelete(inter2[0]);
-    insertKeysIntoLeaf(KeysToMove, NumToMove, inter2[numLeaf2-1], endIndexLeaf2 + 1);
+    insertKeysIntoLeaf(KeysToMove, Pointers, NumToMove, inter2[numLeaf2-1], endIndexLeaf2 + 1);
     delete []KeysToMove;
+    delete []Pointers;
 }
 
 
-void DAstatic::swapHeadTailLen2Is1(NodeForStree **inter1, int numLeaf1, int startIndexLeaf1,
-                                   int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
-    NodeForStree * n = inter1[numLeaf1-1];
+void DynamicArray::swapHeadTailLen2Is1(NodeDA **inter1, int numLeaf1, int startIndexLeaf1,
+                                       int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+    NodeDA * n = inter1[numLeaf1-1];
     int NumToMove = endIndexLeaf2 - endIndexLeaf1;
     int* KeysToMove = new int[NumToMove];
+    NodeDA ** Pointers = new NodeDA *[NumToMove];
     int ik = 0;
     for (int i = startIndexLeaf2; i <= endIndexLeaf2; i++) {
         KeysToMove[ik] = n->Keys[i];
+        Pointers[ik] = n->Pointers[i];
         ik++;
     }
     for (int i = endIndexLeaf1 + 1; i < startIndexLeaf2; i++) {
         KeysToMove[ik] = n->Keys[i];
+        Pointers[ik] = n->Pointers[i];
         ik++;
     }
     for (int i = endIndexLeaf2 + 1; i < n->NumOfKeys; i++) {
         n->Keys[i-NumToMove] = n->Keys[i];
+        n->Pointers[i-NumToMove] = n->Pointers[i];
     }
     n->NumOfKeys -= NumToMove;
     CompleteAdjustAncestorNodesAfterDelete(n);
-    insertKeysIntoLeaf(KeysToMove, NumToMove, inter1[0], startIndexLeaf1);
+    insertKeysIntoLeaf(KeysToMove, Pointers, NumToMove, inter1[0], startIndexLeaf1);
     delete []KeysToMove;
+    delete []Pointers;
 }
 
 
-void DAstatic::swapHeadTailLen1Is2(NodeForStree **inter1, NodeForStree ** inter2, int numLeaf1, int numLeaf2,
-                                   int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
-    NodeForStree * n = inter1[0];
+void DynamicArray::swapHeadTailLen1Is2(NodeDA **inter1, NodeDA ** inter2, int numLeaf1, int numLeaf2,
+                                       int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+    NodeDA * n = inter1[0];
     int NumToMove = startIndexLeaf2 + inter1[0]->NumOfKeys-startIndexLeaf1;
     int* KeysToMove = new int[NumToMove];
+    NodeDA ** Pointers = new NodeDA *[NumToMove];
     int ik = 0;
     for (int i = endIndexLeaf1 + 1; i < startIndexLeaf2; i++) {
         KeysToMove[ik] = inter2[0]->Keys[i];
+        Pointers[ik] = inter2[0]->Pointers[i];
         ik++;
     }
     for (int i = startIndexLeaf1; i < n->NumOfKeys; i++) {
         KeysToMove[ik] = n->Keys[i];
+        Pointers[ik] = n->Pointers[i];
         ik++;
     }
     for (int i = 0; i <= endIndexLeaf1; i++) {
         KeysToMove[ik] = inter2[0]->Keys[i];
+        Pointers[ik] = inter2[0]->Pointers[i];
         ik++;
     }
 
     //delete range 1
     DeleteMidPartOfTwoAdjacentLeaves(inter1[0], startIndexLeaf1, inter1[1], startIndexLeaf2-1);
     //insert
-    NodeForStree * y = inter2[numLeaf2-1];
-    insertKeysIntoLeaf(KeysToMove, NumToMove, y, endIndexLeaf2 + 1);
+    NodeDA * y = inter2[numLeaf2-1];
+    insertKeysIntoLeaf(KeysToMove, Pointers, NumToMove, y, endIndexLeaf2 + 1);
     delete []KeysToMove;
+    delete []Pointers;
 }
 
 
-void DAstatic::swapHeadTailLen2Is2(NodeForStree **inter1, NodeForStree ** inter2, int numLeaf1, int numLeaf2,
-                                   int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
-    NodeForStree * n = inter2[0];
+void DynamicArray::swapHeadTailLen2Is2(NodeDA **inter1, NodeDA ** inter2, int numLeaf1, int numLeaf2,
+                                       int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+    NodeDA * n = inter2[0];
     int NumToMove = endIndexLeaf2 + 1 + inter2[0]->NumOfKeys-endIndexLeaf1-1;
+    NodeDA ** Pointers = new NodeDA *[NumToMove];
     int* KeysToMove = new int[NumToMove];
     int ik = 0;
     for (int i = startIndexLeaf2; i < n->NumOfKeys; i++) {
         KeysToMove[ik] = n->Keys[i];
+        Pointers[ik] = n->Pointers[i];
         ik++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         KeysToMove[ik] = inter2[1]->Keys[i];
+        Pointers[ik] = inter2[1]->Pointers[i];
         ik++;
     }
     for (int i = endIndexLeaf1 + 1; i < startIndexLeaf2; i++) {
         KeysToMove[ik] = n->Keys[i];
+        Pointers[ik] = n->Pointers[i];
         ik++;
     }
     //delete range 2
     DeleteMidPartOfTwoAdjacentLeaves(inter2[0], endIndexLeaf1+1, inter2[1], endIndexLeaf2);
 
     //insert
-    NodeForStree * y = inter1[0];
-    insertKeysIntoLeaf(KeysToMove, NumToMove, y, startIndexLeaf1);
+    NodeDA * y = inter1[0];
+    insertKeysIntoLeaf(KeysToMove, Pointers, NumToMove, y, startIndexLeaf1);
+    delete []Pointers;
     delete []KeysToMove;
 }
 
 
-void DAstatic::SwapRangesAdjacentWhenLensAreBoth2(NodeForStree **inter1, NodeForStree ** inter2, int numLeaf1, int numLeaf2,
-                                                  int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+
+void DynamicArray::SwapRangesAdjacentWhenLensAreBoth2(NodeDA **inter1, NodeDA ** inter2, int numLeaf1, int numLeaf2,
+                                                      int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int num =  inter1[0]->NumOfKeys-startIndexLeaf1 + inter1[1]->NumOfKeys + inter2[0]->NumOfKeys + endIndexLeaf2+1;
     int * keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int tk = 0;
     for (int i = startIndexLeaf2; i < inter2[0]->NumOfKeys; i++) {
         keys[tk] = inter2[0]->Keys[i];
+        Pointers[tk] = inter2[0]->Pointers[i];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         keys[tk] = inter2[1]->Keys[i];
+        Pointers[tk] = inter2[1]->Pointers[i];
         tk++;
     }
     for (int i = endIndexLeaf1 + 1; i < inter1[1]->NumOfKeys; i++) {
         keys[tk] = inter1[1]->Keys[i];
+        Pointers[tk] = inter1[1]->Pointers[i];
         tk++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         keys[tk] = inter2[0]->Keys[i];
+        Pointers[tk] = inter2[0]->Pointers[i];
         tk++;
     }
     for (int i = startIndexLeaf1; i < inter1[0]->NumOfKeys; i++) {
         keys[tk] = inter1[0]->Keys[i];
+        Pointers[tk] = inter1[0]->Pointers[i];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf1; i++) {
         keys[tk] = inter1[1]->Keys[i];
+        Pointers[tk] = inter1[1]->Pointers[i];
         tk++;
     }
     tk = 0;
     for (int i = startIndexLeaf1; i < inter1[0]->NumOfKeys; i++) {
         inter1[0]->Keys[i] = keys[tk];
+        inter1[0]->Pointers[i] = Pointers[tk];
         tk++;
     }
     for (int i = 0; i < inter1[1]->NumOfKeys; i++) {
         inter1[1]->Keys[i] = keys[tk];
+        inter1[1]->Pointers[i] = Pointers[tk];
         tk++;
     }
     for (int i = 0; i < inter2[0]->NumOfKeys; i++) {
         inter2[0]->Keys[i] = keys[tk];
+        inter2[0]->Pointers[i] = Pointers[tk];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         inter2[1]->Keys[i] = keys[tk];
+        inter2[1]->Pointers[i] = Pointers[tk];
         tk++;
     }
+    NodeDA ** nodes = new NodeDA *[4];
+    nodes[0] = inter1[0];
+    nodes[1] = inter1[1];
+    nodes[2] = inter2[0];
+    nodes[3] = inter2[1];
+    UpdateSumKeys(nodes, 4);
+    delete []nodes;
+    delete []Pointers;
     delete []keys;
 }
 
 //starting start is two adjacent leaves
 // in this function, we delete the end of first leaf and start of the second leaf
 // then adjust these two leaves and their ancestors
-NodeForStree * DAstatic::DeleteMidPartOfTwoAdjacentLeaves(NodeForStree * leaf1, int startIndexInLeaf1, NodeForStree * leaf2, int endIndexInLeaf2) {
+NodeDA * DynamicArray::DeleteMidPartOfTwoAdjacentLeaves(NodeDA * leaf1, int startIndexInLeaf1, NodeDA * leaf2, int endIndexInLeaf2) {
     leaf1->NumOfKeys = startIndexInLeaf1;
     movePointerInNodeForward(leaf2, endIndexInLeaf2+1, leaf2->NumOfKeys-1, 0);
     leaf2->NumOfKeys -= endIndexInLeaf2 + 1;
     if (leaf1->NumOfKeys < Min) { // leaf1 < Min
-        NodeForStree * neighbour,* newl;
+        NodeDA * neighbour,* newl;
         int neighbour_index = getLeftNeighborIndex(leaf1);
         if (neighbour_index == -1) { // leaf1 index is 0
             neighbour = leaf1->Parent->Pointers[1];
@@ -2695,7 +3778,7 @@ NodeForStree * DAstatic::DeleteMidPartOfTwoAdjacentLeaves(NodeForStree * leaf1, 
                 newl = coalesceNodes(leaf1, neighbour, neighbour_index);
                 if (newl->NumOfKeys < Min) {
                     int nei_index = getLeftNeighborIndex(newl);
-                    NodeForStree * nei;
+                    NodeDA * nei;
                     if (nei_index == -1) {
                         nei = newl->Parent->Pointers[1];
                     } else {
@@ -2713,7 +3796,7 @@ NodeForStree * DAstatic::DeleteMidPartOfTwoAdjacentLeaves(NodeForStree * leaf1, 
                 return leaf1;
             }
         } else { //leaf1 index >= 1
-            NodeForStree * re = nullptr;
+            NodeDA * re = nullptr;
             neighbour = leaf1->Parent->Pointers[neighbour_index];
             if (neighbour->NumOfKeys+leaf1->NumOfKeys <= Capacity) {
                 re  = coalesceNodes(leaf1, neighbour, neighbour_index);
@@ -2731,32 +3814,36 @@ NodeForStree * DAstatic::DeleteMidPartOfTwoAdjacentLeaves(NodeForStree * leaf1, 
 }
 
 //to be chekced
-void DAstatic::SwapRangesAdjacentRightIs2(NodeForStree **inter1, NodeForStree ** inter2, int numLeaf1, int numLeaf2,
-                                          int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SwapRangesAdjacentRightIs2(NodeDA **inter1, NodeDA ** inter2, int numLeaf1, int numLeaf2,
+                                              int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int num =  endIndexLeaf2 +1 + inter2[0]->NumOfKeys + inter1[numLeaf1-1]->NumOfKeys - endIndexLeaf1-1;
     int * keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int tk = 0;
     for (int i = startIndexLeaf2; i < inter2[0]->NumOfKeys; i++) {
         keys[tk] = inter2[0]->Keys[i];
+        Pointers[tk] = inter2[0]->Pointers[i];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         keys[tk] = inter2[1]->Keys[i];
+        Pointers[tk] = inter2[1]->Pointers[i];
         tk++;
     }
     for (int i = endIndexLeaf1 + 1; i < inter1[numLeaf1-1]->NumOfKeys; i++) {
         keys[tk] = inter1[numLeaf1-1]->Keys[i];
+        Pointers[tk] = inter1[numLeaf1-1]->Pointers[i];
         tk++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         keys[tk] = inter2[0]->Keys[i];
+        Pointers[tk] = inter2[0]->Pointers[i];
         tk++;
     }
     //delete
-    NodeForStree * pre = inter1[numLeaf1-1]; // findPrevious(inter2[0]);
+    NodeDA * pre = inter1[numLeaf1-1]; // findPrevious(inter2[0]);
     pre->Next = inter2[1]; //->Next;
     /*
-    inter2[0]->Previous->Next = inter2[0]->Next;
     if (inter2[0]->Next != nullptr) {
         inter2[0]->Next->Previous = inter2[0]->Previous;
     }
@@ -2765,34 +3852,41 @@ void DAstatic::SwapRangesAdjacentRightIs2(NodeForStree **inter1, NodeForStree **
     deleteEntry(inter2[0]->Parent, getIndexInParent(inter2[0]));
 
     DeleteMidPartOfTwoAdjacentLeaves(inter1[numLeaf1-1], endIndexLeaf1 + 1, inter2[1], endIndexLeaf2);
-    insertKeysIntoLeaf(keys, num, inter1[0], startIndexLeaf1);
+    insertKeysIntoLeaf(keys, Pointers, num, inter1[0], startIndexLeaf1);
+
     delete []keys;
+    delete []Pointers;
 }
 
 
-void DAstatic::SwapRangesAdjacentLeftIs2(NodeForStree **inter1, NodeForStree ** inter2, int numLeaf1, int numLeaf2,
-                                         int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SwapRangesAdjacentLeftIs2(NodeDA **inter1, NodeDA ** inter2, int numLeaf1, int numLeaf2,
+                                             int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int num =  startIndexLeaf2 + inter1[1]->NumOfKeys + inter1[0]->NumOfKeys - startIndexLeaf1;
     int * keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int tk = 0;
     for (int i = endIndexLeaf1 + 1; i < inter1[1]->NumOfKeys; i++) {
         keys[tk] = inter1[1]->Keys[i];
+        Pointers[tk] = inter1[1]->Pointers[i];
         tk++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         keys[tk] = inter2[0]->Keys[i];
+        Pointers[tk] = inter2[0]->Pointers[i];
         tk++;
     }
     for (int i = startIndexLeaf1; i < inter1[0]->NumOfKeys; i++) {
         keys[tk] = inter1[0]->Keys[i];
+        Pointers[tk] = inter1[0]->Pointers[i];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf1; i++) {
         keys[tk] = inter1[1]->Keys[i];
+        Pointers[tk] = inter1[1]->Pointers[i];
         tk++;
     }
     //delete
-    NodeForStree ** LeafToDelete = new NodeForStree*[1];
+    NodeDA ** LeafToDelete = new NodeDA *[1];
     LeafToDelete[0] = inter1[1];
     inter1[0]->Next = inter1[1]->Next;
     /*
@@ -2805,193 +3899,252 @@ void DAstatic::SwapRangesAdjacentLeftIs2(NodeForStree **inter1, NodeForStree ** 
 
     DeleteMidPartOfTwoAdjacentLeaves(inter1[0], startIndexLeaf1, inter2[0], startIndexLeaf2-1);
 
-    insertKeysIntoLeaf(keys,num, inter2[numLeaf2-1], endIndexLeaf2+1);
+    insertKeysIntoLeaf(keys, Pointers, num, inter2[numLeaf2-1], endIndexLeaf2+1);
+    delete []Pointers;
     delete []keys;
 }
 
 
 
-void DAstatic::SwapRangesAdjacentWhenLensAreBoth1(NodeForStree * leftnode, NodeForStree * rightnode, int startIndexLeaf1,
-                                                  int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SWapRangesAdjacentWhenLensAreBoth1(NodeDA * leftnode, NodeDA * rightnode, int startIndexLeaf1,
+                                                      int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int num =  endIndexLeaf2+1+leftnode->NumOfKeys-startIndexLeaf1;
     int * keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int tk = 0;
     for (int i = startIndexLeaf2; i <= endIndexLeaf2; i++) {
         keys[tk] = rightnode->Keys[i];
+        Pointers[tk] = rightnode->Pointers[i];
         tk++;
     }
     for (int i = endIndexLeaf1 + 1; i < leftnode->NumOfKeys; i++) {
         keys[tk] = leftnode->Keys[i];
+        Pointers[tk] = leftnode->Pointers[i];
         tk++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         keys[tk] = rightnode->Keys[i];
+        Pointers[tk] = rightnode->Pointers[i];
         tk++;
     }
     for (int i = startIndexLeaf1; i <= endIndexLeaf1; i++) {
         keys[tk] = leftnode->Keys[i];
+        Pointers[tk] = leftnode->Pointers[i];
         tk++;
     }
     tk = 0;
     for (int i = startIndexLeaf1; i < leftnode->NumOfKeys; i++) {
         leftnode->Keys[i] = keys[tk];
+        leftnode->Pointers[i] = Pointers[tk];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         rightnode->Keys[i] = keys[tk];
+        rightnode->Pointers[i] = Pointers[tk];
         tk++;
     }
+    NodeDA ** ns = new NodeDA *[2];
+    ns[0] = leftnode;
+    ns[1] = rightnode;
+    UpdateSumKeys(ns, 2);
+    delete []ns;
+    delete []Pointers;
     delete []keys;
+    return;
 }
 
 
-void DAstatic::SwapRangesAdjacentWhenLensAre1And2(NodeForStree * leftnode, NodeForStree* right1, NodeForStree * right2,
-                                                  int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SWapRangesAdjacentWhenLensAre1And2(NodeDA * leftnode, NodeDA * right1, NodeDA * right2,
+                                                      int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int num =  endIndexLeaf2+1+right1->NumOfKeys+leftnode->NumOfKeys-startIndexLeaf1;
     int * keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int tk = 0;
     for (int i = startIndexLeaf2; i < right1->NumOfKeys; i++) {
         keys[tk] = right1->Keys[i];
+        Pointers[tk] = right1->Pointers[i];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         keys[tk] = right2->Keys[i];
+        Pointers[tk] = right2->Pointers[i];
         tk++;
     }
     for (int i = endIndexLeaf1 + 1; i < leftnode->NumOfKeys; i++) {
         keys[tk] = leftnode->Keys[i];
+        Pointers[tk] = leftnode->Pointers[i];
         tk++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         keys[tk] = right1->Keys[i];
+        Pointers[tk] = right1->Pointers[i];
         tk++;
     }
     for (int i = startIndexLeaf1; i <= endIndexLeaf1; i++) {
         keys[tk] = leftnode->Keys[i];
+        Pointers[tk] = leftnode->Pointers[i];
         tk++;
     }
 
     tk = 0;
     for (int i = startIndexLeaf1; i < leftnode->NumOfKeys; i++) {
         leftnode->Keys[i] = keys[tk];
+        leftnode->Pointers[i] = Pointers[tk];
         tk++;
     }
     for (int i = 0; i < right1->NumOfKeys; i++) {
         right1->Keys[i] = keys[tk];
+        right1->Pointers[i] = Pointers[tk];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         right2->Keys[i] = keys[tk];
+        right2->Pointers[i] = Pointers[tk];
         tk++;
     }
+    NodeDA ** ns = new NodeDA *[3];
+    ns[0] = leftnode;
+    ns[1] = right1;
+    ns[2] = right2;
+    UpdateSumKeys(ns, 3);
+    delete []ns;
     delete []keys;
+    delete []Pointers;
 }
 
 
-void DAstatic::SwapRangesAdjacentWhenLensAre2And1(NodeForStree * left1, NodeForStree * left2, NodeForStree * right,
-                                                  int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SwapRangesAdjacentWhenLensAre2And1(NodeDA * left1, NodeDA * left2, NodeDA * right,
+                                                      int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int num =  endIndexLeaf2+1 + left2->NumOfKeys + left1->NumOfKeys-startIndexLeaf1;
     int * keys = new int[num];
+    NodeDA ** Pointers = new NodeDA *[num];
     int tk = 0;
     for (int i = startIndexLeaf2; i <= endIndexLeaf2; i++) {
         keys[tk] = right->Keys[i];
+        Pointers[tk] = right->Pointers[i];
         tk++;
     }
     for (int i = endIndexLeaf1 + 1; i < left2->NumOfKeys; i++) {
         keys[tk] = left2->Keys[i];
+        Pointers[tk] = left2->Pointers[i];
         tk++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         keys[tk] = right->Keys[i];
+        Pointers[tk] = right->Pointers[i];
         tk++;
     }
     for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
         keys[tk] = left1->Keys[i];
+        Pointers[tk] = left1->Pointers[i];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf1; i++) {
         keys[tk] = left2->Keys[i];
+        Pointers[tk] = left2->Pointers[i];
         tk++;
     }
 
     tk = 0;
     for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
         left1->Keys[i] = keys[tk];
+        left1->Pointers[i] = Pointers[tk];
         tk++;
     }
     for (int i = 0; i < left2->NumOfKeys; i++) {
         left2->Keys[i] = keys[tk];
+        left2->Pointers[i] = Pointers[tk];
         tk++;
     }
     for (int i = 0; i <= endIndexLeaf2; i++) {
         right->Keys[i] = keys[tk];
+        right->Pointers[i] = Pointers[tk];
         tk++;
     }
+
+    NodeDA ** ns = new NodeDA *[3];
+    ns[0] = left1;
+    ns[1] = left2;
+    ns[2] = right;
+    UpdateSumKeys(ns, 3);
+    delete []ns;
     delete []keys;
+    delete []Pointers;
+
 }
 
 
-void DAstatic::SwapRangesAdjacentWhenLeftIs1(NodeForStree * left, NodeForStree ** inter2, int numLeaf2,
-                                             int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SwapRangesAdjacentWhenLeftIs1(NodeDA * left, NodeDA ** inter2, int numLeaf2,
+                                                 int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int NumToMove = startIndexLeaf2 + left->NumOfKeys - startIndexLeaf1;
     int * keys = new int[NumToMove];
+    NodeDA ** Pointers = new NodeDA *[NumToMove];
     int tk = 0;
     for (int i = endIndexLeaf1 + 1; i < left->NumOfKeys; i++) {
         keys[tk] = left->Keys[i];
+        Pointers[tk] = left->Pointers[i];
         tk++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         keys[tk] = inter2[0]->Keys[i];
+        Pointers[tk] = inter2[0]->Pointers[i];
         tk++;
     }
     for (int i = startIndexLeaf1; i <= endIndexLeaf1; i++) {
         keys[tk] = left->Keys[i];
+        Pointers[tk] = left->Pointers[i];
         tk++;
     }
     //delete
     DeleteMidPartOfTwoAdjacentLeaves(left, startIndexLeaf1, inter2[0], startIndexLeaf2-1);
     //insert
-    insertKeysIntoLeaf(keys, NumToMove, inter2[numLeaf2 - 1], endIndexLeaf2 + 1);
+    insertKeysIntoLeaf(keys, Pointers, NumToMove, inter2[numLeaf2 - 1], endIndexLeaf2 + 1);
     delete []keys;
+    delete []Pointers;
 }
 
 
 
-void DAstatic::SwapRangesAdjacentWhenRightIs1(NodeForStree **inter1, int numLeaf1, NodeForStree * right,
-                                              int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SwapRangesAdjacentWhenRightIs1(NodeDA **inter1, int numLeaf1, NodeDA * right,
+                                                  int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int numToMove = endIndexLeaf2+1 + inter1[numLeaf1-1]->NumOfKeys - endIndexLeaf1-1;
     int * keys = new int[numToMove];
+    NodeDA ** Pointers = new NodeDA *[numToMove];
     int tk = 0;
     for (int i = startIndexLeaf2; i <= endIndexLeaf2; i++) {
         keys[tk] = right->Keys[i];
+        Pointers[tk] = right->Pointers[i];
         tk++;
     }
     for (int i = endIndexLeaf1 + 1; i < inter1[numLeaf1-1]->NumOfKeys; i++) {
         keys[tk] = inter1[numLeaf1-1]->Keys[i];
+        Pointers[tk] = inter1[numLeaf1-1]->Pointers[i];
         tk++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         keys[tk] = right->Keys[i];
+        Pointers[tk] = right->Pointers[i];
         tk++;
     }
     //delete
     DeleteMidPartOfTwoAdjacentLeaves(inter1[numLeaf1-1], endIndexLeaf1 + 1, right, endIndexLeaf2);
 
     //insert
-    insertKeysIntoLeaf(keys, numToMove, inter1[0], startIndexLeaf1);
+    insertKeysIntoLeaf(keys, Pointers, numToMove, inter1[0], startIndexLeaf1);
     delete []keys;
+    delete []Pointers;
 }
 
 
 //to be ckeched
-void DAstatic::SwapRangesAdjacent(NodeForStree ** inter1, NodeForStree ** inter2, int numLeaf1, int numLeaf2,
-                                  int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2){
+void DynamicArray::SwapRangesAdjacent(NodeDA ** inter1, NodeDA ** inter2, int numLeaf1, int numLeaf2,
+                                      int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2){
     if (numLeaf1 == 1 && numLeaf2 == 1) {
-        SwapRangesAdjacentWhenLensAreBoth1(inter1[0], inter2[0], startIndexLeaf1, endIndexLeaf1,
+        SWapRangesAdjacentWhenLensAreBoth1(inter1[0], inter2[0], startIndexLeaf1, endIndexLeaf1,
                                            startIndexLeaf2, endIndexLeaf2);
         return;
     } else if (numLeaf1 == 1 && numLeaf2 == 2) {
-        SwapRangesAdjacentWhenLensAre1And2(inter1[0], inter2[0], inter2[1], startIndexLeaf1, endIndexLeaf1,
+        SWapRangesAdjacentWhenLensAre1And2(inter1[0], inter2[0], inter2[1], startIndexLeaf1, endIndexLeaf1,
                                            startIndexLeaf2, endIndexLeaf2);
         return;
     } else if (numLeaf1 == 2 && numLeaf2 == 1) {
@@ -3024,33 +4177,39 @@ void DAstatic::SwapRangesAdjacent(NodeForStree ** inter1, NodeForStree ** inter2
 
     int numToMove1 = endIndexLeaf1 + 1 + inter2[numLeaf2-1]->NumOfKeys - endIndexLeaf2 - 1;
     int* KeyToMove1 = new int[numToMove1];
+    NodeDA ** PointerToMove1 = new NodeDA *[numToMove1];
     int i1 = 0;
     for (int i = 0; i <= endIndexLeaf1; i++) {
         KeyToMove1[i1] = inter1[numLeaf1-1]->Keys[i];
+        PointerToMove1[i1] = inter1[numLeaf1-1]->Pointers[i];
         i1++;
     }
     for (int i = endIndexLeaf2 + 1; i < inter2[numLeaf2-1]->NumOfKeys; i++) {
         KeyToMove1[i1] = inter2[numLeaf2-1]->Keys[i];
+        PointerToMove1[i1] = inter2[numLeaf2-1]->Pointers[i];
         i1++;
     }
 
     int numToMove2 = startIndexLeaf1 + inter2[0]->NumOfKeys - startIndexLeaf2;
     int * KeyToMove2 = new int[numToMove2];
+    NodeDA ** PointerToMove2 = new NodeDA *[numToMove2];
     int i2 = 0;
     for (int i = 0; i < startIndexLeaf1; i++) {
         KeyToMove2[i2] = inter1[0]->Keys[i];
+        PointerToMove2[i2] = inter1[0]->Pointers[i];
         i2++;
     }
     for (int i = startIndexLeaf2; i < inter2[0]->NumOfKeys; i++) {
         KeyToMove2[i2] = inter2[0]->Keys[i];
+        PointerToMove2[i2] = inter2[0]->Pointers[i];
         i2++;
     }
 
     //insert for range 1
-    insertKeysIntoLeaf(KeyToMove1, numToMove1, inter1[numLeaf1-2], inter1[numLeaf1 - 2]->NumOfKeys);
+    insertKeysIntoLeaf(KeyToMove1, PointerToMove1, numToMove1, inter1[numLeaf1-2], inter1[numLeaf1 - 2]->NumOfKeys);
 
     //insert for range 2
-    bool changePointer = insertKeysIntoLeaf(KeyToMove2, numToMove2, inter2[1], 0);
+    bool changePointer = insertKeysIntoLeaf(KeyToMove2, PointerToMove2, numToMove2, inter2[1], 0);
     if (changePointer) {
         inter2[1] = inter2[1]->Next;
     }
@@ -3058,77 +4217,88 @@ void DAstatic::SwapRangesAdjacent(NodeForStree ** inter1, NodeForStree ** inter2
     //middle pointers
     int NumMiddlePointers = (inter1[numLeaf1-1]->NumOfKeys - endIndexLeaf1 - 1) + (startIndexLeaf2);
     int * Middlekeys = new int[NumMiddlePointers];
+    NodeDA ** Middlepointers = new NodeDA *[NumMiddlePointers];
     int mi = 0;
     for (int i = endIndexLeaf1 + 1; i < inter1[numLeaf1-1]->NumOfKeys; i++) {
         Middlekeys[mi] = inter1[numLeaf1-1]->Keys[i];
+        Middlepointers[mi] = inter1[numLeaf1-1]->Pointers[i];
         mi++;
     }
     for (int i = 0; i < startIndexLeaf2; i++) {
         Middlekeys[mi] = inter2[0]->Keys[i];
+        Middlepointers[mi] = inter2[0]->Pointers[i];
         mi++;
     }
 
     //delete two leaves in the middle
     inter1[numLeaf1-1]->NumOfKeys=0;
     inter2[0]->NumOfKeys=0;
-    NodeForStree ** ToDelete = new NodeForStree*[2];
+    NodeDA ** ToDelete = new NodeDA *[2];
     ToDelete[0] = inter1[numLeaf1-1];
     ToDelete[1] = inter2[0];
-    NodeForStree * pre = inter2[numLeaf2-1];// inter1[numLeaf1-2];
+
+    NodeDA * pre = inter2[numLeaf2-1];// inter1[numLeaf1-2];
     if (pre != nullptr) {
         pre->Next = inter2[0]->Next;
-    }
-    /*
-    if (inter1[numLeaf1-1]->Previous != nullptr) {
-        inter1[numLeaf1-1]->Previous->Next = inter2[0]->Next;
+        /*
         if (inter2[0]->Next != nullptr) {
             inter2[0]->Next->Previous = inter1[numLeaf1-1]->Previous;
         }
+
     } else {
         if (inter2[0]->Next != nullptr) {
             inter2[0]->Next->Previous = inter1[numLeaf1-1]->Previous;
         }
+         */
     }
-    */
-    NodeForStree * preLeaf = deleteMulEntry(ToDelete, 2);
+
+    NodeDA * preLeaf = deleteMulEntry(ToDelete, 2);
     CallRedistributeMergeRecomputeKeysInAncestorsLeftPart(preLeaf, ToDelete, 2);
     ReplaceMidOfTwoAdjacentLeaves(inter2[numLeaf2-1], inter1[0], endIndexLeaf2+1, startIndexLeaf1-1,
-                                  Middlekeys, NumMiddlePointers);
+                                  Middlekeys, Middlepointers, NumMiddlePointers);
+    delete []PointerToMove1;
+    delete []PointerToMove2;
     delete []KeyToMove1;
     delete []KeyToMove2;
     delete []Middlekeys;
+    delete []Middlepointers;
     delete []ToDelete;
 }
 
 //return true if toIndex == 0 and insertMulKeysIntoLeafAfterOneSplitting returns true
-bool DAstatic::insertKeysIntoLeaf(int * keysToInsert, int numKeysToInsert, NodeForStree * toLeaf, int toIndex) {
+bool DynamicArray::insertKeysIntoLeaf(int * keysToInsert, NodeDA ** pointersToInsert,
+                                      int numKeysToInsert, NodeDA * toLeaf, int toIndex) {
     if (toLeaf->NumOfKeys + numKeysToInsert <= Capacity) {
-        insertMulKeysIntoLeaf(keysToInsert, numKeysToInsert, toLeaf, toIndex);
+        insertMulKeysIntoLeaf(keysToInsert, pointersToInsert, numKeysToInsert, toLeaf, toIndex);
         return false;
     } else if (toLeaf->NumOfKeys + numKeysToInsert <= 2*Capacity) {
-        return insertMulKeysIntoLeafAfterOneSplitting(keysToInsert, numKeysToInsert, toLeaf, toIndex);
+        return insertMulKeysIntoLeafAfterOneSplitting(keysToInsert, pointersToInsert, numKeysToInsert, toLeaf, toIndex);
     } else {
-        insertMulKeysIntoLeafAfterMulSplitting(keysToInsert, numKeysToInsert, toLeaf, toIndex);
+        insertMulKeysIntoLeafAfterMulSplitting(keysToInsert, pointersToInsert, numKeysToInsert, toLeaf, toIndex);
         return false;
     }
 }
 
 //split maybe more than once
-void DAstatic::insertMulKeysIntoLeafAfterMulSplitting(int * keysToInsert, int numKeysToInsert,
-                                                      NodeForStree * toLeaf, int toIndex) {
+void DynamicArray::insertMulKeysIntoLeafAfterMulSplitting(int * keysToInsert, NodeDA ** pointersToInsert,
+                                                          int numKeysToInsert, NodeDA * toLeaf, int toIndex) {
     int totalNumKeys = numKeysToInsert + toLeaf->NumOfKeys;
     int * newKeys = new int[totalNumKeys];
+    NodeDA ** newPointers = new NodeDA *[totalNumKeys];
     int i = 0;
     for (int j = 0; j < toIndex; j++) {
         newKeys[i] = toLeaf->Keys[j];
+        newPointers[i] = toLeaf->Pointers[j];
         i++;
     }
     for (int j = 0; j < numKeysToInsert; j++) {
         newKeys[i] = keysToInsert[j];
+        newPointers[i] = pointersToInsert[j];
         i++;
     }
     for (int j = toIndex; j < toLeaf->NumOfKeys; j++) {
         newKeys[i] = toLeaf->Keys[j];
+        newPointers[i] = toLeaf->Pointers[j];
         i++;
     }
     toLeaf->NumOfKeys = 0;
@@ -3138,17 +4308,19 @@ void DAstatic::insertMulKeysIntoLeafAfterMulSplitting(int * keysToInsert, int nu
         int ik = 0;
         for (; ik < Capacity; ik++) {
             toLeaf->Keys[ik] = newKeys[ik];
+            toLeaf->Pointers[ik] = newPointers[ik];
         }
         toLeaf->NumOfKeys = Capacity;
         int parentNewSiblingNum = numFullParent - 1;
         if (remainNumLeaf != 0) {
             parentNewSiblingNum++;
         }
-        NodeForStree ** parentNewSibling = new NodeForStree*[parentNewSiblingNum];
+        NodeDA ** parentNewSibling = new NodeDA *[parentNewSiblingNum];
         for (int k = 0; k < parentNewSiblingNum; k++) {
-            parentNewSibling[k] = makeLeafForStree(Capacity);
+            parentNewSibling[k] = makeLeafonedp(Capacity);
             for (int y = 0; y < Capacity; y++) {
                 parentNewSibling[k]->Keys[y] = newKeys[ik]; //allPointers[i];->NumOfKeys
+                parentNewSibling[k]->Pointers[y] = newPointers[ik]; //allPointers[i];->NumOfKeys
                 parentNewSibling[k]->NumOfKeys++;
                 ik++;
                 if (ik == totalNumKeys) {
@@ -3162,11 +4334,12 @@ void DAstatic::insertMulKeysIntoLeafAfterMulSplitting(int * keysToInsert, int nu
             //parentNewSibling[p+1]->Previous = parentNewSibling[p];
         }
 
-        NodeForStree * pa = toLeaf->Parent;
+        NodeDA * pa = toLeaf->Parent;
         int startindex = getIndexInParent(toLeaf)+1;
         pa->Keys[startindex-1] = NodeSumKeys(toLeaf);
         insertLeavesIntoLeafParent(pa, startindex, parentNewSibling, parentNewSiblingNum);
         delete []newKeys;
+        delete []newPointers;
         delete []parentNewSibling;
         return;
     } else {
@@ -3178,35 +4351,40 @@ void DAstatic::insertMulKeysIntoLeafAfterMulSplitting(int * keysToInsert, int nu
         if (numFullParent == 0) { //toParent is the second last one
             for (int y = 0; y < numkeysInSecondLastParent; y++) {
                 toLeaf->Keys[y] = newKeys[i_allpointer]; //allPointers[i_allpointer]->NumOfKeys
+                toLeaf->Pointers[y] = newPointers[i_allpointer]; //allPointers[i_allpointer]->NumOfKeys
                 i_allpointer++;
             }
             toLeaf->NumOfKeys = numkeysInSecondLastParent;
         } else {
             for (int y = 0; y < Capacity; y++) {
                 toLeaf->Keys[y] = newKeys[i_allpointer]; //allPointers[i_allpointer]->NumOfKeys
+                toLeaf->Pointers[y] = newPointers[i_allpointer]; //allPointers[i_allpointer]->NumOfKeys
                 i_allpointer++;
             }
             toLeaf->NumOfKeys = Capacity;
         }
         //set parent's new siblings
-        NodeForStree ** parentNewSibling  = new NodeForStree*[parentNewSiblingNum];
+        NodeDA ** parentNewSibling  = new NodeDA *[parentNewSiblingNum];
         for (int k = 0; k < parentNewSiblingNum; k++) {
-            parentNewSibling[k] = makeLeafForStree(Capacity);
+            parentNewSibling[k] = makeLeafonedp(Capacity);
             if (k == parentNewSiblingNum-1) { // the last one
                 for (int y = 0; y < numkeysInLastParent; y++) {
                     parentNewSibling[k]->Keys[y] = newKeys[i_allpointer]; //allPointers[i_allpointer]->NumOfKeys
+                    parentNewSibling[k]->Pointers[y] = newPointers[i_allpointer]; //allPointers[i_allpointer]->NumOfKeys
                     i_allpointer++;
                 }
                 parentNewSibling[k]->NumOfKeys = numkeysInLastParent;
             } else if (k == parentNewSiblingNum-2) { // the second last one
                 for (int y = 0; y < numkeysInSecondLastParent; y++) {
                     parentNewSibling[k]->Keys[y] = newKeys[i_allpointer];//allPointers[i_allpointer]->NumOfKeys
+                    parentNewSibling[k]->Pointers[y] = newPointers[i_allpointer];//allPointers[i_allpointer]->NumOfKeys
                     i_allpointer++;
                 }
                 parentNewSibling[k]->NumOfKeys = numkeysInSecondLastParent;
             } else {
                 for (int y = 0; y < Capacity; y++) {
                     parentNewSibling[k]->Keys[y] = newKeys[i_allpointer]; //allPointers[i_allpointer]->NumOfKeys
+                    parentNewSibling[k]->Pointers[y] = newPointers[i_allpointer]; //allPointers[i_allpointer]->NumOfKeys
                     i_allpointer++;
                 }
                 parentNewSibling[k]->NumOfKeys = Capacity;
@@ -3217,66 +4395,74 @@ void DAstatic::insertMulKeysIntoLeafAfterMulSplitting(int * keysToInsert, int nu
             //parentNewSibling[p+1]->Previous = parentNewSibling[p];
         }
 
-        NodeForStree ** paNode = &parentNewSibling[0];
-        NodeForStree * pa = toLeaf->Parent;
+        NodeDA ** paNode = &parentNewSibling[0];
+        NodeDA * pa = toLeaf->Parent;
         int startindex = getIndexInParent(toLeaf)+1;
         pa->Keys[startindex-1] = NodeSumKeys(toLeaf);
         insertLeavesIntoLeafParent(pa, startindex, paNode, parentNewSiblingNum);
         delete []newKeys;
+        delete []newPointers;
         delete []parentNewSibling;
     }
 }
 
-void DAstatic::SwapWhenLeftLenIs2(NodeForStree * left1, NodeForStree * left2, int startIndexLeaf1, int endIndexLeaf1,
-                                  NodeForStree ** inter2, int numLeaf2, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SwapWhenLeftLenIs2(NodeDA * left1, NodeDA * left2, int startIndexLeaf1, int endIndexLeaf1,
+                                      NodeDA ** inter2, int numLeaf2, int startIndexLeaf2, int endIndexLeaf2) {
     //delete leaves
     inter2[0]->Next = inter2[numLeaf2-1];
     //inter2[numLeaf2-1]->Previous = inter2[0];
 
     //only delete entries, no redistribution or merging
-    NodeForStree * preLeaf = deleteMulEntry(&inter2[1], numLeaf2-2);
+    NodeDA * preLeaf = deleteMulEntry(&inter2[1], numLeaf2-2);
     // adjust keys in ancestors
     CallRedistributeMergeRecomputeKeysInAncestorsLeftPart(preLeaf, &inter2[1], numLeaf2-2);
     //insert leaves
-    NodeForStree * toParent = left1->Parent;
+    NodeDA * toParent = left1->Parent;
     int insertIndexInToParent = getIndexInParent(left1) + 1;
     insertLeavesIntoLeafParent(toParent, insertIndexInToParent, &inter2[1], numLeaf2-2);
 
     //insert keys at the end of inter2[0] to the beginning of inter2[1], without deleting these keys
     int numToInsert20 = inter2[0]->NumOfKeys - startIndexLeaf2;
+    NodeDA ** pointersToInsert20 = new NodeDA *[numToInsert20];
     int * keysToInset20 = new int[numToInsert20];
     for (int i = startIndexLeaf2; i < inter2[0]->NumOfKeys; ++i) {
+        pointersToInsert20[i-startIndexLeaf2] = inter2[0]->Pointers[i];
         keysToInset20[i-startIndexLeaf2] = inter2[0]->Keys[i];
     }
-    bool changePointer = insertKeysIntoLeaf(keysToInset20, numToInsert20, inter2[1], 0);
+    bool changePointer = insertKeysIntoLeaf(keysToInset20, pointersToInsert20, numToInsert20, inter2[1], 0);
     if (changePointer) {
         inter2[1] = inter2[1]->Next;
     }
 
     //insert keys at the beginning of inter2[numLeaf2-1] to the end of inter2[numLeaf2-2], without deleting these keys
     int numToInsert22 = endIndexLeaf2 + 1;
+    NodeDA ** pointersToInsert22 = new NodeDA *[numToInsert22];
     int * keysToInset22 = new int[numToInsert22];
     for (int j = 0; j <= endIndexLeaf2; ++j) {
+        pointersToInsert22[j] = inter2[numLeaf2-1]->Pointers[j];
         keysToInset22[j] = inter2[numLeaf2-1]->Keys[j];
     }
-    insertKeysIntoLeaf(keysToInset22, numToInsert22, inter2[numLeaf2-2], inter2[numLeaf2-2]->NumOfKeys);
+    insertKeysIntoLeaf(keysToInset22, pointersToInsert22, numToInsert22, inter2[numLeaf2-2], inter2[numLeaf2-2]->NumOfKeys);
 
     //keys and pointers of left1, left2
     int numToMoveInLeft = left1->NumOfKeys - startIndexLeaf1 + endIndexLeaf1 + 1;
+    NodeDA ** pointersToMoveInLeft = new NodeDA *[numToMoveInLeft];
     int * keysToMoveInLeft = new int[numToMoveInLeft];
     int idxToMoveInLeft = 0;
     for (int i = startIndexLeaf1; i < left1->NumOfKeys; ++i) {
+        pointersToMoveInLeft[idxToMoveInLeft] = left1->Pointers[i];
         keysToMoveInLeft[idxToMoveInLeft] = left1->Keys[i];
         idxToMoveInLeft++;
     }
     for (int i = 0; i <= endIndexLeaf1; ++i) {
+        pointersToMoveInLeft[idxToMoveInLeft] = left2->Pointers[i];
         keysToMoveInLeft[idxToMoveInLeft] = left2->Keys[i];
         idxToMoveInLeft++;
     }
 
     //replace keys in inter2[0], inter2[numLeaf2-1] with pointersToMoveInLeft, keysToMoveInLeft
     ReplaceMidOfTwoAdjacentLeaves(inter2[0], inter2[numLeaf2-1], startIndexLeaf2, endIndexLeaf2,
-                                  keysToMoveInLeft, numToMoveInLeft);
+                                  keysToMoveInLeft, pointersToMoveInLeft, numToMoveInLeft);
     //delete end keys in left
     left1->NumOfKeys = startIndexLeaf1;
     CompleteAdjustAncestorNodesAfterDelete(left1);
@@ -3284,23 +4470,28 @@ void DAstatic::SwapWhenLeftLenIs2(NodeForStree * left1, NodeForStree * left2, in
     movePointerInNodeForward(left2, endIndexLeaf1+1, left2->NumOfKeys-1, 0);
     left2->NumOfKeys -= endIndexLeaf1 + 1;
     CompleteAdjustAncestorNodesAfterDelete(left2);
+    delete []pointersToInsert20;
+    delete []pointersToInsert22;
     delete []keysToInset20;
     delete []keysToInset22;
     delete []keysToMoveInLeft;
+    delete []pointersToMoveInLeft;
 }
 
 //replace the mid part of two adjacent leaves and go upwards
 //without deleting anything
-void DAstatic::ReplaceMidOfTwoAdjacentLeaves(NodeForStree * left, NodeForStree * right, int startIndexLeft, int endIndexRight,
-                                             int * keysToInsert, int numToInsert) {
+void DynamicArray::ReplaceMidOfTwoAdjacentLeaves(NodeDA * left, NodeDA * right, int startIndexLeft, int endIndexRight,
+                                                 int * keysToInsert, NodeDA ** pointersToInsert, int numToInsert) {
     int numToBeReplaced = left->NumOfKeys - startIndexLeft + endIndexRight + 1;
     int idxToMoveInLeft = 0;
     if (numToBeReplaced == numToInsert) {
         for (int i = startIndexLeft; i < left->NumOfKeys; ++i) {
+            left->Pointers[i] = pointersToInsert[idxToMoveInLeft];
             left->Keys[i] = keysToInsert[idxToMoveInLeft];
             idxToMoveInLeft++;
         }
         for (int i = 0; i <= endIndexRight; ++i) {
+            right->Pointers[i] = pointersToInsert[idxToMoveInLeft];
             right->Keys[i] = keysToInsert[idxToMoveInLeft];
             idxToMoveInLeft++;
         }
@@ -3309,22 +4500,25 @@ void DAstatic::ReplaceMidOfTwoAdjacentLeaves(NodeForStree * left, NodeForStree *
         return;
     } else if (numToBeReplaced < numToInsert) {
         for (int i = startIndexLeft; i < left->NumOfKeys; ++i) {
+            left->Pointers[i] = pointersToInsert[idxToMoveInLeft];
             left->Keys[i] = keysToInsert[idxToMoveInLeft];
             idxToMoveInLeft++;
         }
         for (int i = 0; i <= endIndexRight; ++i) {
+            right->Pointers[i] = pointersToInsert[idxToMoveInLeft];
             right->Keys[i] = keysToInsert[idxToMoveInLeft];
             idxToMoveInLeft++;
         }
         AdjustAncestorKeysAccordingToCurNode(left);
-        insertKeysIntoLeaf(&keysToInsert[numToBeReplaced],
+        insertKeysIntoLeaf(&keysToInsert[numToBeReplaced], &pointersToInsert[numToBeReplaced],
                            numToInsert - numToBeReplaced, right, endIndexRight+1);
         return;
     } else {// numToBeReplaced > numToInsert
-        int numToBeReplaced1 = left->NumOfKeys - startIndexLeft, numToBeReplaced2 = endIndexRight + 1;
+        int numToBeReplaced1 = left->NumOfKeys - startIndexLeft;
         if (numToInsert < numToBeReplaced1) {
             int li = startIndexLeft;
             for (; idxToMoveInLeft < numToInsert; ++idxToMoveInLeft) {
+                left->Pointers[li] = pointersToInsert[idxToMoveInLeft];
                 left->Keys[li] = keysToInsert[idxToMoveInLeft];
                 li++;
             }
@@ -3332,6 +4526,7 @@ void DAstatic::ReplaceMidOfTwoAdjacentLeaves(NodeForStree * left, NodeForStree *
             return;
         } else if (numToInsert == numToBeReplaced1) {
             for (int i = startIndexLeft; i < left->NumOfKeys; ++i) {
+                left->Pointers[i] = pointersToInsert[idxToMoveInLeft];
                 left->Keys[i] = keysToInsert[idxToMoveInLeft];
                 idxToMoveInLeft++;
             }
@@ -3343,11 +4538,13 @@ void DAstatic::ReplaceMidOfTwoAdjacentLeaves(NodeForStree * left, NodeForStree *
             return;
         } else { // numToInsert < numToBeReplaced
             for (int i = startIndexLeft; i < left->NumOfKeys; ++i) {
+                left->Pointers[i] = pointersToInsert[idxToMoveInLeft];
                 left->Keys[i] = keysToInsert[idxToMoveInLeft];
                 idxToMoveInLeft++;
             }
             int ri = 0;
             for (; idxToMoveInLeft < numToInsert; ++idxToMoveInLeft) {
+                right->Pointers[ri] = pointersToInsert[idxToMoveInLeft];
                 right->Keys[ri] = keysToInsert[idxToMoveInLeft];
                 ri++;
             }
@@ -3362,8 +4559,8 @@ void DAstatic::ReplaceMidOfTwoAdjacentLeaves(NodeForStree * left, NodeForStree *
 }
 
 
-void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, int startIndexLeaf1, int endIndexLeaf1,
-                                    NodeForStree * right1, NodeForStree * right2, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SwapWhenBothLensAre2(NodeDA * left1, NodeDA * left2, int startIndexLeaf1, int endIndexLeaf1,
+                                        NodeDA * right1, NodeDA * right2, int startIndexLeaf2, int endIndexLeaf2) {
     int len11 = left1->NumOfKeys - startIndexLeaf1;
     int len12 = endIndexLeaf1+1;
     int len21 = right1->NumOfKeys - startIndexLeaf2;
@@ -3373,13 +4570,16 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
 
     if (len1 < len21) {
         int * keys1 = new int[len1];
+        NodeDA ** pointers1 = new NodeDA *[len1];
         int ikeys1 = 0;
         for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
             keys1[ikeys1]=left1->Keys[i];
+            pointers1[ikeys1]=left1->Pointers[i];
             ikeys1++;
         }
         for (int i = 0; i <= endIndexLeaf1; i++) {
             keys1[ikeys1]=left2->Keys[i];
+            pointers1[ikeys1]=left2->Pointers[i];
             ikeys1++;
         }
         int i2 = 0;
@@ -3387,6 +4587,9 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
             int tmp = right1->Keys[i];
             right1->Keys[i] = keys1[i2];
             keys1[i2] = tmp;
+            NodeDA * tmpp = right1->Pointers[i];
+            right1->Pointers[i] = pointers1[i2];
+            pointers1[i2] = tmpp;
             i2++;
             if (i2 == len1) {
                 break;
@@ -3395,39 +4598,49 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
         i2 = 0;
         for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
             left1->Keys[i] = keys1[i2];
+            left1->Pointers[i] = pointers1[i2];
             i2++;
         }
         for (int i = 0; i <= endIndexLeaf1; i++) {
             left2->Keys[i] = keys1[i2];
+            left2->Pointers[i] = pointers1[i2];
             i2++;
         }
         int newstart2 = startIndexLeaf2+len1;
         int numKeysToMove = len2-len1;
         int * keysToMove = new int[numKeysToMove];
+        NodeDA ** pointersToMove = new NodeDA *[numKeysToMove];
         int ik = 0;
         for (int i = newstart2; i < right1->NumOfKeys; i++) {
             keysToMove[ik] = right1->Keys[i];
+            pointersToMove[ik] = right1->Pointers[i];
             ik++;
         }
         for (int i = 0; i <= endIndexLeaf2; i++) {
             keysToMove[ik] = right2->Keys[i];
+            pointersToMove[ik] = right2->Pointers[i];
             ik++;
         }
-        insertKeysIntoLeaf(keysToMove, numKeysToMove, left2, endIndexLeaf1 + 1);
+        insertKeysIntoLeaf(keysToMove, pointersToMove, numKeysToMove, left2, endIndexLeaf1 + 1);
         AdjustAncestorKeysAccordingToCurNode(left1);
         DeleteMidPartOfTwoAdjacentLeaves(right1, startIndexLeaf2 + len1, right2, endIndexLeaf2);
         delete []keys1;
+        delete []pointers1;
         delete []keysToMove;
+        delete []pointersToMove;
         return;
     } else if (len1 == len21) {
         int * keys1 = new int[len1];
+        NodeDA ** pointers1 = new NodeDA *[len1];
         int ikeys1 = 0;
         for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
             keys1[ikeys1]=left1->Keys[i];
+            pointers1[ikeys1]=left1->Pointers[i];
             ikeys1++;
         }
         for (int i = 0; i <= endIndexLeaf1; i++) {
             keys1[ikeys1]=left2->Keys[i];
+            pointers1[ikeys1]=left2->Pointers[i];
             ikeys1++;
         }
         int i2 = 0;
@@ -3435,42 +4648,54 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
             int  tmp = right1->Keys[i];
             right1->Keys[i] = keys1[i2];
             keys1[i2] = tmp;
+            NodeDA * tmpp = right1->Pointers[i];
+            right1->Pointers[i] = pointers1[i2];
+            pointers1[i2] = tmpp;
             i2++;
         }
         i2 = 0;
         for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
             left1->Keys[i] = keys1[i2];
+            left1->Pointers[i] = pointers1[i2];
             i2++;
         }
         for (int i = 0; i <= endIndexLeaf1; i++) {
             left2->Keys[i] = keys1[i2];
+            left2->Pointers[i] = pointers1[i2];
             i2++;
         }
         int numKeysToMove = len22;
         int * keysToMove = new int[numKeysToMove];
+        NodeDA ** pointersToMove = new NodeDA *[numKeysToMove];
         int ik = 0;
         for (int i = 0; i <= endIndexLeaf2; i++) {
             keysToMove[ik] = right2->Keys[i];
+            pointersToMove[ik] = right2->Pointers[i];
             ik++;
         }
-        insertKeysIntoLeaf(keysToMove, numKeysToMove, left2, endIndexLeaf1 + 1);
+        insertKeysIntoLeaf(keysToMove, pointersToMove, numKeysToMove, left2, endIndexLeaf1 + 1);
         AdjustAncestorKeysAccordingToCurNode(left1);
         movePointerInNodeForward(right2, endIndexLeaf2+1, right2->NumOfKeys-1, 0);
         right2->NumOfKeys -= len22;
         CompleteAdjustAncestorNodesAfterDelete(right2);
         AdjustAncestorKeysAccordingToCurNode(right1);
         delete []keys1;
+        delete []pointers1;
         delete []keysToMove;
+        delete []pointersToMove;
         return;
     } else if (len1 < len2) { // len2 > len1 > len21
         int * keys1 = new int[len1];
+        NodeDA ** pointers1 = new NodeDA *[len1];
         int ikeys1 = 0;
         for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
             keys1[ikeys1]=left1->Keys[i];
+            pointers1[ikeys1]=left1->Pointers[i];
             ikeys1++;
         }
         for (int i = 0; i <= endIndexLeaf1; i++) {
             keys1[ikeys1]=left2->Keys[i];
+            pointers1[ikeys1]=left2->Pointers[i];
             ikeys1++;
         }
         int i2 = 0;
@@ -3478,6 +4703,10 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
             int tmp = right1->Keys[i];
             right1->Keys[i] = keys1[i2];
             keys1[i2] = tmp;
+
+            NodeDA * tmpp = right1->Pointers[i];
+            right1->Pointers[i] = pointers1[i2];
+            pointers1[i2] = tmpp;
             i2++;
         }
         int newstart2 = 0;
@@ -3485,6 +4714,10 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
             int tmp = right2->Keys[i];
             right2->Keys[i] = keys1[i2];
             keys1[i2] = tmp;
+
+            NodeDA * tmpp = right2->Pointers[i];
+            right2->Pointers[i] = pointers1[i2];
+            pointers1[i2] = tmpp;
             i2++;
             if (i2 == len1) {
                 newstart2 = i+1;
@@ -3494,37 +4727,46 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
         i2 = 0;
         for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
             left1->Keys[i] = keys1[i2];
+            left1->Pointers[i] = pointers1[i2];
             i2++;
         }
         for (int i = 0; i <= endIndexLeaf1; i++) {
             left2->Keys[i] = keys1[i2];
+            left2->Pointers[i] = pointers1[i2];
             i2++;
         }
         int numKeysToMove = len2 - len1;
         int * keysToMove = new int[numKeysToMove];
+        NodeDA ** pointersToMove = new NodeDA *[numKeysToMove];
         int ik = 0;
         for (int i = newstart2; i <= endIndexLeaf2; i++) {
             keysToMove[ik] = right2->Keys[i];
+            pointersToMove[ik] = right2->Pointers[i];
             ik++;
         }
         AdjustAncestorKeysAccordingToCurNode(left1);
-        insertKeysIntoLeaf(keysToMove, numKeysToMove, left2, endIndexLeaf1 + 1);
+        insertKeysIntoLeaf(keysToMove, pointersToMove, numKeysToMove, left2, endIndexLeaf1 + 1);
         AdjustAncestorKeysAccordingToCurNode(right1);
         movePointerInNodeForward(right2, endIndexLeaf2+1, right2->NumOfKeys-1, newstart2);
         right2->NumOfKeys -= numKeysToMove;
         CompleteAdjustAncestorNodesAfterDelete(right2);
         delete []keys1;
+        delete []pointers1;
         delete []keysToMove;
+        delete []pointersToMove;
         return;
     } else if (len1 == len2) {
         int * keys1 = new int[len1];
+        NodeDA ** pointers1 = new NodeDA *[len1];
         int ikeys1 = 0;
         for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
             keys1[ikeys1]=left1->Keys[i];
+            pointers1[ikeys1]=left1->Pointers[i];
             ikeys1++;
         }
         for (int i = 0; i <= endIndexLeaf1; i++) {
             keys1[ikeys1]=left2->Keys[i];
+            pointers1[ikeys1]=left2->Pointers[i];
             ikeys1++;
         }
         int i2 = 0;
@@ -3532,21 +4774,29 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
             int tmp = right1->Keys[i];
             right1->Keys[i] = keys1[i2];
             keys1[i2] = tmp;
+            NodeDA * tmpp = right1->Pointers[i];
+            right1->Pointers[i] = pointers1[i2];
+            pointers1[i2] = tmpp;
             i2++;
         }
         for (int i = 0; i <= endIndexLeaf2; i++) {
             int tmp = right2->Keys[i];
             right2->Keys[i] = keys1[i2];
             keys1[i2] = tmp;
+            NodeDA * tmpp = right2->Pointers[i];
+            right2->Pointers[i] = pointers1[i2];
+            pointers1[i2] = tmpp;
             i2++;
         }
         i2 = 0;
         for (int i = startIndexLeaf1; i < left1->NumOfKeys; i++) {
             left1->Keys[i] = keys1[i2];
+            left1->Pointers[i] = pointers1[i2];
             i2++;
         }
         for (int i = 0; i <= endIndexLeaf1; i++) {
             left2->Keys[i] = keys1[i2];
+            left2->Pointers[i] = pointers1[i2];
             i2++;
         }
         AdjustAncestorKeysAccordingToCurNode(left1);
@@ -3554,6 +4804,7 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
         AdjustAncestorKeysAccordingToCurNode(right1);
         AdjustAncestorKeysAccordingToCurNode(right2);
         delete []keys1;
+        delete []pointers1;
         return;
     } else { // len1 > len2
         SwapWhenBothLensAre2(right1, right2, startIndexLeaf2, endIndexLeaf2, left1, left2, startIndexLeaf1, endIndexLeaf1);
@@ -3563,8 +4814,8 @@ void DAstatic::SwapWhenBothLensAre2(NodeForStree * left1, NodeForStree * left2, 
 
 
 
-void DAstatic::SwapWhenBothLensAre1(NodeForStree * leaf1, int startIndex1, int endIndex1, NodeForStree * leaf2,
-                                    int startIndex2, int endIndex2) {
+void DynamicArray::SwapWhenBothLensAre1(NodeDA * leaf1, int startIndex1, int endIndex1, NodeDA * leaf2,
+                                        int startIndex2, int endIndex2) {
     int numToMove1 = endIndex1 - startIndex1 + 1;
     int numToMove2 = endIndex2 - startIndex2 + 1;
     int exchangeNum = numToMove1;
@@ -3576,6 +4827,10 @@ void DAstatic::SwapWhenBothLensAre1(NodeForStree * leaf1, int startIndex1, int e
         int tmpk = leaf1->Keys[startIndex1+i];
         leaf1->Keys[startIndex1+i] = leaf2->Keys[startIndex2+i];
         leaf2->Keys[startIndex2+i] = tmpk;
+
+        NodeDA * tmpp = leaf1->Pointers[startIndex1+i];
+        leaf1->Pointers[startIndex1+i] = leaf2->Pointers[startIndex2+i];
+        leaf2->Pointers[startIndex2+i] = tmpp;
     }
     if (numToMove1 == numToMove2) {
         AdjustAncestorKeysAccordingToCurNode(leaf1);
@@ -3584,33 +4839,40 @@ void DAstatic::SwapWhenBothLensAre1(NodeForStree * leaf1, int startIndex1, int e
     } else if (numToMove1 < numToMove2) {
         int numKeys = numToMove2 - numToMove1;
         int * keys = new int[numKeys];
+        NodeDA ** pointers = new NodeDA *[numKeys];
         for (int i = 0; i < numKeys; ++i) {
             keys[i] = leaf2->Keys[startIndex2 + exchangeNum + i];
+            pointers[i] = leaf2->Pointers[startIndex2 + exchangeNum + i];
         }
         movePointerInNodeForward(leaf2, endIndex2+1, leaf2->NumOfKeys-1, startIndex2 + exchangeNum);
         leaf2->NumOfKeys -= numKeys;
         CompleteAdjustAncestorNodesAfterDelete(leaf2);
-        insertKeysIntoLeaf(keys, numKeys, leaf1, endIndex1+1);
+        insertKeysIntoLeaf(keys, pointers, numKeys, leaf1, endIndex1+1);
         delete []keys;
+        delete []pointers;
         return;
     } else { //numToMove1 > numToMove2
         int numKeys = numToMove1 - numToMove2;
         int * keys = new int[numKeys];
+        NodeDA ** pointers = new NodeDA *[numKeys];
         for (int i = 0; i < numKeys; ++i) {
             keys[i] = leaf1->Keys[startIndex1 + exchangeNum + i];
+            pointers[i] = leaf1->Pointers[startIndex1 + exchangeNum + i];
         }
         movePointerInNodeForward(leaf1, endIndex1+1, leaf1->NumOfKeys-1, startIndex1 + exchangeNum);
         leaf1->NumOfKeys -= numKeys;
         CompleteAdjustAncestorNodesAfterDelete(leaf1);
-        insertKeysIntoLeaf(keys, numKeys, leaf2, endIndex2+1);
+        insertKeysIntoLeaf(keys, pointers, numKeys, leaf2, endIndex2+1);
         delete []keys;
+        delete []pointers;
         return;
     }
 }
 
 
-void DAstatic::SwapWhenLensAre1And2(NodeForStree * leaf1, int startIndex1, int endIndex1, NodeForStree * leaf2,
-                                    int startIndex2, NodeForStree * leaf3, int endIndex3) {
+
+void DynamicArray::SwapWhenLensAre1And2(NodeDA * leaf1, int startIndex1, int endIndex1, NodeDA * leaf2,
+                                        int startIndex2, NodeDA * leaf3, int endIndex3) {
     int len1 = endIndex1 - startIndex1 + 1;
     int len2 = leaf2->NumOfKeys - startIndex2;
     int len3 = endIndex3 + 1;
@@ -3619,38 +4881,52 @@ void DAstatic::SwapWhenLensAre1And2(NodeForStree * leaf1, int startIndex1, int e
             int tmpk = leaf2->Keys[startIndex2+i];
             leaf2->Keys[startIndex2+i] = leaf1->Keys[startIndex1+i];
             leaf1->Keys[startIndex1+i] = tmpk;
+            NodeDA * tmpp = leaf2->Pointers[startIndex2+i];
+            leaf2->Pointers[startIndex2+i] = leaf1->Pointers[startIndex1+i];
+            leaf1->Pointers[startIndex1+i] = tmpp;
         }
         int numToMove = len2 - len1 + len3;
         int * keysToMove = new int[numToMove];
+        NodeDA ** pointersToMove = new NodeDA *[numToMove];
         int tk = 0;
         for (int i = startIndex2 + len1; i < leaf2->NumOfKeys; i++) {
             keysToMove[tk] = leaf2->Keys[i];
+            pointersToMove[tk] = leaf2->Pointers[i];
             tk++;
         }
         for (int i = 0; i < len3; i++) {
             keysToMove[tk] = leaf3->Keys[i];
+            pointersToMove[tk] = leaf3->Pointers[i];
             tk++;
         }
-        insertKeysIntoLeaf(keysToMove, numToMove, leaf1, endIndex1 + 1);
+        insertKeysIntoLeaf(keysToMove, pointersToMove, numToMove, leaf1, endIndex1 + 1);
         DeleteMidPartOfTwoAdjacentLeaves(leaf2, startIndex2 + len1, leaf3, endIndex3);
         delete []keysToMove;
+        delete []pointersToMove;
         return;
     } else if (len1 == len2) {
         for (int i = 0; i < len1; i++) {
             int tmpk = leaf2->Keys[startIndex2+i];
             leaf2->Keys[startIndex2+i] = leaf1->Keys[startIndex1+i];
             leaf1->Keys[startIndex1+i] = tmpk;
+
+            NodeDA * tmpp = leaf2->Pointers[startIndex2+i];
+            leaf2->Pointers[startIndex2+i] = leaf1->Pointers[startIndex1+i];
+            leaf1->Pointers[startIndex1+i] = tmpp;
         }
         int * keysToMove = new int[len3];
+        NodeDA ** pointersToMove = new NodeDA *[len3];
         for (int i = 0; i < len3; i++) {
             keysToMove[i] = leaf3->Keys[i];
+            pointersToMove[i] = leaf3->Pointers[i];
         }
         movePointerInNodeForward(leaf3, endIndex3+1, leaf3->NumOfKeys-1, 0);
         leaf3->NumOfKeys -= len3;
         CompleteAdjustAncestorNodesAfterDelete(leaf3);
         AdjustAncestorKeysAccordingToCurNode(leaf2);
-        insertKeysIntoLeaf(keysToMove, len3, leaf1, endIndex1 + 1);
+        insertKeysIntoLeaf(keysToMove, pointersToMove, len3, leaf1, endIndex1 + 1);
         delete []keysToMove;
+        delete []pointersToMove;
         return;
     } else if (len1 < len2+len3) {
         int indexIn1 = startIndex1;
@@ -3658,6 +4934,9 @@ void DAstatic::SwapWhenLensAre1And2(NodeForStree * leaf1, int startIndex1, int e
             int tmpk = leaf2->Keys[startIndex2+i];
             leaf2->Keys[startIndex2+i] = leaf1->Keys[indexIn1];
             leaf1->Keys[indexIn1] = tmpk;
+            NodeDA * tmpp = leaf2->Pointers[startIndex2+i];
+            leaf2->Pointers[startIndex2+i] = leaf1->Pointers[indexIn1];
+            leaf1->Pointers[indexIn1] = tmpp;
             indexIn1++;
         }
         int newStartIn3 = len1 - len2;
@@ -3665,19 +4944,25 @@ void DAstatic::SwapWhenLensAre1And2(NodeForStree * leaf1, int startIndex1, int e
             int tmpk = leaf3->Keys[i];
             leaf3->Keys[i] = leaf1->Keys[indexIn1];
             leaf1->Keys[indexIn1] = tmpk;
+            NodeDA * tmpp = leaf3->Pointers[i];
+            leaf3->Pointers[i] = leaf1->Pointers[indexIn1];
+            leaf1->Pointers[indexIn1] = tmpp;
             indexIn1++;
         }
         int NumKeysToMove = endIndex3 - newStartIn3 + 1;
         int * keysToMove = new int[NumKeysToMove];
+        NodeDA ** pointersToMove = new NodeDA *[NumKeysToMove];
         for (int i = 0; i < NumKeysToMove; i++) {
             keysToMove[i] = leaf3->Keys[newStartIn3+i];
+            pointersToMove[i] = leaf3->Pointers[newStartIn3+i];
         }
-        insertKeysIntoLeaf(keysToMove, NumKeysToMove, leaf1, endIndex1 + 1);
+        insertKeysIntoLeaf(keysToMove, pointersToMove, NumKeysToMove, leaf1, endIndex1 + 1);
         movePointerInNodeForward(leaf3, len3, leaf3->NumOfKeys-1, len1-len2);
         leaf3->NumOfKeys -= NumKeysToMove;
         CompleteAdjustAncestorNodesAfterDelete(leaf3);
         AdjustAncestorKeysAccordingToCurNode(leaf2);
         delete []keysToMove;
+        delete []pointersToMove;
         return;
     } else if (len1 == len2+len3) {
         int indexIn1 = startIndex1;
@@ -3685,12 +4970,18 @@ void DAstatic::SwapWhenLensAre1And2(NodeForStree * leaf1, int startIndex1, int e
             int tmpk = leaf2->Keys[startIndex2+i];
             leaf2->Keys[startIndex2+i] = leaf1->Keys[indexIn1];
             leaf1->Keys[indexIn1] = tmpk;
+            NodeDA * tmpp = leaf2->Pointers[startIndex2+i];
+            leaf2->Pointers[startIndex2+i] = leaf1->Pointers[indexIn1];
+            leaf1->Pointers[indexIn1] = tmpp;
             indexIn1++;
         }
         for (int i = 0; i < len3; i++) {
             int tmpk = leaf3->Keys[i];
             leaf3->Keys[i] = leaf1->Keys[indexIn1];
             leaf1->Keys[indexIn1] = tmpk;
+            NodeDA * tmpp = leaf3->Pointers[i];
+            leaf3->Pointers[i] = leaf1->Pointers[indexIn1];
+            leaf1->Pointers[indexIn1] = tmpp;
             indexIn1++;
         }
         AdjustAncestorKeysAccordingToCurNode(leaf1);
@@ -3702,21 +4993,29 @@ void DAstatic::SwapWhenLensAre1And2(NodeForStree * leaf1, int startIndex1, int e
             int tmpk = leaf2->Keys[startIndex2+i];
             leaf2->Keys[startIndex2+i] = leaf1->Keys[indexIn1];
             leaf1->Keys[indexIn1] = tmpk;
+            NodeDA * tmpp = leaf2->Pointers[startIndex2+i];
+            leaf2->Pointers[startIndex2+i] = leaf1->Pointers[indexIn1];
+            leaf1->Pointers[indexIn1] = tmpp;
             indexIn1++;
         }
         for (int i = 0; i < len3; i++) {
             int tmpk = leaf3->Keys[i];
             leaf3->Keys[i] = leaf1->Keys[indexIn1];
             leaf1->Keys[indexIn1] = tmpk;
+            NodeDA * tmpp = leaf3->Pointers[i];
+            leaf3->Pointers[i] = leaf1->Pointers[indexIn1];
+            leaf1->Pointers[indexIn1] = tmpp;
             indexIn1++;
         }
         int newStart3 = indexIn1;
         int NumToMove = len1 - len2 - len3;
         int* KeysToMove = new int[NumToMove];
+        NodeDA **PointersToMove = new NodeDA *[NumToMove];
         for (int i = newStart3; i <= endIndex1; i++) {
             KeysToMove[i-newStart3] = leaf1->Keys[i];
+            PointersToMove[i-newStart3] = leaf1->Pointers[i];
         }
-        insertKeysIntoLeaf(KeysToMove, NumToMove, leaf3, endIndex3 + 1);
+        insertKeysIntoLeaf(KeysToMove, PointersToMove, NumToMove, leaf3, endIndex3 + 1);
         for (int i = endIndex1 + 1; i < leaf1->NumOfKeys; i++) {
             leaf1->Keys[i-NumToMove] = leaf1->Keys[i];
             leaf1->Pointers[i-NumToMove] = leaf1->Pointers[i];
@@ -3725,16 +5024,17 @@ void DAstatic::SwapWhenLensAre1And2(NodeForStree * leaf1, int startIndex1, int e
         CompleteAdjustAncestorNodesAfterDelete(leaf1);
         AdjustAncestorKeysAccordingToCurNode(leaf2);
         delete []KeysToMove;
+        delete []PointersToMove;
         return;
     }
 }
 
 
-NodeForStree * DAstatic::coalesceNodesStopAtParent(NodeForStree * n, NodeForStree * neighbour, int  neighbour_index) {
+NodeDA * DynamicArray::coalesceNodesStopAtParent(NodeDA * n, NodeDA * neighbour, int  neighbour_index) {
     int i, j, neighbour_insertion_index;
-    NodeForStree * tmp;
+    NodeDA * tmp;
     int n_index = neighbour_index + 1;
-    //set neighbor to be the node on the left
+    //set neighbor to be the NodeDA on the left
     if (neighbour_index == -1) {
         tmp = n;
         n = neighbour;
@@ -3761,7 +5061,7 @@ NodeForStree * DAstatic::coalesceNodesStopAtParent(NodeForStree * n, NodeForStre
         neighbour->Next = n->Next;
         /*
         if (neighbour->Next != nullptr) {
-            NodeForStree * tmp = neighbour->Next;
+            NodeDA * tmp = neighbour->Next;
             tmp->Previous = neighbour;
         }
          */
@@ -3779,7 +5079,7 @@ NodeForStree * DAstatic::coalesceNodesStopAtParent(NodeForStree * n, NodeForStre
 //return merging node
 // LeftRight = 1 if rightleaf more keys
 //LeftRight = 2 if left leaf more keys
-NodeForStree * DAstatic::swapStartPointer(NodeForStree * leftLeaf, int endIndexInLeftLeaf, NodeForStree *rightLeaf, int endIndexInRightLeaf) {
+NodeDA * DynamicArray::swapStartPointer(NodeDA * leftLeaf, int endIndexInLeftLeaf, NodeDA *rightLeaf, int endIndexInRightLeaf) {
     int i = 0;
     int j = 0;
     int exchangeNum = endIndexInLeftLeaf;
@@ -3787,6 +5087,9 @@ NodeForStree * DAstatic::swapStartPointer(NodeForStree * leftLeaf, int endIndexI
         exchangeNum = endIndexInRightLeaf;
     }
     for (; i <= exchangeNum; i++) {
+        NodeDA * tmpPointer = leftLeaf->Pointers[i];
+        leftLeaf->Pointers[i] = rightLeaf->Pointers[j];
+        rightLeaf->Pointers[j] = tmpPointer;
         int tmpKey = leftLeaf->Keys[i];
         leftLeaf->Keys[i] = rightLeaf->Keys[j];
         rightLeaf->Keys[j] = tmpKey;
@@ -3805,35 +5108,44 @@ NodeForStree * DAstatic::swapStartPointer(NodeForStree * leftLeaf, int endIndexI
 }
 
 
-void DAstatic::SwapForTailHead(NodeForStree ** inter1, NodeForStree ** inter2, int numLeaf1, int numLeaf2,
-                               int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+
+void DynamicArray::SwapForTailHead(NodeDA ** inter1, NodeDA ** inter2, int numLeaf1, int numLeaf2,
+                                   int startIndexLeaf1, int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     swapWholeLeafAndGoUpwards(&inter1[1], &inter2[1], numLeaf1-2, numLeaf2-2);
     int numMidKeys = endIndexLeaf2+1 + startIndexLeaf2 - endIndexLeaf1 - 1 + inter1[0]->NumOfKeys - startIndexLeaf1;
     int * midKeys = new int[numMidKeys];
+    NodeDA ** midPointers = new NodeDA *[numMidKeys];
     int midIdx = 0;
     for (int i = 0; i <= endIndexLeaf2; ++i) {
         midKeys[midIdx] = inter2[numLeaf2-1]->Keys[i];
+        midPointers[midIdx] = inter2[numLeaf2-1]->Pointers[i];
         midIdx++;
     }
     for (int i = endIndexLeaf1+1; i < startIndexLeaf2; ++i) {
         midKeys[midIdx] = inter2[0]->Keys[i];
+        midPointers[midIdx] = inter2[0]->Pointers[i];
         midIdx++;
     }
     for (int i = startIndexLeaf1; i < inter1[0]->NumOfKeys; ++i) {
         midKeys[midIdx] = inter1[0]->Keys[i];
+        midPointers[midIdx] = inter1[0]->Pointers[i];
         midIdx++;
     }
 
     int numBegin2 = inter2[0]->NumOfKeys - startIndexLeaf2;
     int * keysBegin2 = new int[numBegin2];
+    NodeDA ** pointersBegin2 = new NodeDA *[numBegin2];
     for (int i = 0; i < numBegin2; ++i) {
         keysBegin2[i] = inter2[0]->Keys[startIndexLeaf2+i];
+        pointersBegin2[i] = inter2[0]->Pointers[startIndexLeaf2+i];
     }
 
     int numEnd1 = endIndexLeaf1+1;
     int * keysEnd1 = new int[numEnd1];
+    NodeDA ** pointersEnd1 = new NodeDA *[numEnd1];
     for (int i = 0; i < numEnd1; ++i) {
         keysEnd1[i] = inter1[numLeaf1-1]->Keys[i];
+        pointersEnd1[i] = inter1[numLeaf1-1]->Pointers[i];
     }
 
     inter2[numLeaf2-2]->Next = inter1[1];
@@ -3842,88 +5154,98 @@ void DAstatic::SwapForTailHead(NodeForStree ** inter1, NodeForStree ** inter2, i
     inter2[0]->NumOfKeys = 0;
 
     //insert mid keys
-    insertKeysIntoLeaf(midKeys, numMidKeys, inter2[numLeaf2-2], inter2[numLeaf2-2]->NumOfKeys);
+    insertKeysIntoLeaf(midKeys, midPointers, numMidKeys, inter2[numLeaf2-2], inter2[numLeaf2-2]->NumOfKeys);
 
     //keys at the beginning of range 2
     inter1[0]->NumOfKeys = startIndexLeaf1;
-    insertKeysIntoLeaf(keysBegin2, numBegin2, inter1[0], inter1[0]->NumOfKeys);
+    insertKeysIntoLeaf(keysBegin2, pointersBegin2, numBegin2, inter1[0], inter1[0]->NumOfKeys);
     CheckAndMergeRedistributeNode(inter1[0]);
 
     //keys at the end of range 1
-    replaceKeysInLeaf(inter2[numLeaf2-1], 0, endIndexLeaf2, keysEnd1, numEnd1);
+    replaceKeysInLeaf(inter2[numLeaf2-1], 0, endIndexLeaf2, keysEnd1, pointersEnd1, numEnd1);
     delete []midKeys;
+    delete []midPointers;
     delete []keysBegin2;
+    delete []pointersBegin2;
     delete []keysEnd1;
+    delete []pointersEnd1;
 }
 
 
-void DAstatic::SwapWhenLenIs1(NodeForStree * LoneLeaf, NodeForStree **inter2, int numLeaf2, int startIndexLeaf1,
-                              int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
+void DynamicArray::SwapWhenLenIs1(NodeDA * LoneLeaf, NodeDA **inter2, int numLeaf2, int startIndexLeaf1,
+                                  int endIndexLeaf1, int startIndexLeaf2, int endIndexLeaf2) {
     int numInRightPart = LoneLeaf->NumOfKeys - endIndexLeaf1 - 1;
     int numToInsertAfterFullLeaves = numInRightPart + endIndexLeaf2 + 1;
     int * keysToInsertAfterFullLeaves = new int[numToInsertAfterFullLeaves];// make([]int, NumInRightPart);
+    NodeDA ** pointersToInsertAfterFullLeaves = new NodeDA *[numToInsertAfterFullLeaves];// make([]interface{}, NumInRightPart);
     for (int i = 0; i <= endIndexLeaf2; ++i) {
         keysToInsertAfterFullLeaves[i] = inter2[numLeaf2-1]->Keys[i];
+        pointersToInsertAfterFullLeaves[i] = inter2[numLeaf2-1]->Pointers[i];
     }
     for (int i = 0; i < numInRightPart; i++) {
         keysToInsertAfterFullLeaves[endIndexLeaf2+1+i] = LoneLeaf->Keys[endIndexLeaf1+1+i];
+        pointersToInsertAfterFullLeaves[endIndexLeaf2+1+i] = LoneLeaf->Pointers[endIndexLeaf1+1+i];
     }
 
     //keys to move in LoneLeaf
     int numToMoveInLoneLeaf = endIndexLeaf1 - startIndexLeaf1 + 1;
     int * keysToMoveInLoneLeaf = new int[numToMoveInLoneLeaf];
+    NodeDA ** poitnersToMoveInLoneLeaf = new NodeDA *[numToMoveInLoneLeaf];
     for (int i = 0; i < numToMoveInLoneLeaf; ++i) {
         keysToMoveInLoneLeaf[i] = LoneLeaf->Keys[startIndexLeaf1+i];
+        poitnersToMoveInLoneLeaf[i] = LoneLeaf->Pointers[startIndexLeaf1+i];
     }
     //keys to move in the beginning of inter2[0]
     int numToMoveInBeginInter2 = inter2[0]->NumOfKeys - startIndexLeaf2;
     int * keysToMoveInBeginInter2 = new int[numToMoveInBeginInter2];
+    NodeDA ** poitnersToMoveInBeginInter2 = new NodeDA *[numToMoveInBeginInter2];
     for (int i = 0; i < numToMoveInBeginInter2; ++i) {
         keysToMoveInBeginInter2[i] = inter2[0]->Keys[startIndexLeaf2+i];
+        poitnersToMoveInBeginInter2[i] = inter2[0]->Pointers[startIndexLeaf2+i];
     }
 
-    NodeForStree ** leafToInsert = &inter2[1];
+    NodeDA ** leafToInsert = &inter2[1];
     int numLeafToDelete = numLeaf2 - 2;
     //delete leaves
-    NodeForStree * firstl = leafToInsert[0];
-    NodeForStree * lastl = leafToInsert[numLeafToDelete-1];
-    NodeForStree * pre = inter2[0];
+    //NodeDA * firstl = leafToInsert[0];
+    NodeDA * lastl = leafToInsert[numLeafToDelete-1];
+    NodeDA * pre = inter2[0]; // findPrevious(firstl);
     if (pre != nullptr) {
         pre->Next = lastl->Next;
     }
     /*
-    if (firstl->Previous != nullptr) {
-        firstl->Previous->Next = lastl->Next;
-    }
     if (lastl->Next != nullptr) {
         lastl->Next->Previous = firstl->Previous;
     }
      */
-    NodeForStree * preLeaf = deleteMulEntry(leafToInsert, numLeafToDelete);
+    NodeDA * preLeaf = deleteMulEntry(leafToInsert, numLeafToDelete);
     CallRedistributeMergeRecomputeKeysInAncestorsLeftPart(preLeaf, leafToInsert, numLeafToDelete);
 
     //insert leaves
-    NodeForStree * toParent = LoneLeaf->Parent;
+    NodeDA * toParent = LoneLeaf->Parent;
     int startIndexInParent = getIndexInParent(LoneLeaf) + 1;
     insertLeavesIntoLeafParent(toParent, startIndexInParent, leafToInsert, numLeafToDelete);
 
     //insert keysToInsertAfterFullLeaves
-    insertKeysIntoLeaf(keysToInsertAfterFullLeaves, numToInsertAfterFullLeaves,
+    insertKeysIntoLeaf(keysToInsertAfterFullLeaves, pointersToInsertAfterFullLeaves, numToInsertAfterFullLeaves,
                        inter2[numLeaf2-2], inter2[numLeaf2-2]->NumOfKeys);
     LoneLeaf->NumOfKeys = startIndexLeaf1;
-    insertKeysIntoLeaf(keysToMoveInBeginInter2, numToMoveInBeginInter2, LoneLeaf, LoneLeaf->NumOfKeys);
+    insertKeysIntoLeaf(keysToMoveInBeginInter2, poitnersToMoveInBeginInter2, numToMoveInBeginInter2, LoneLeaf, LoneLeaf->NumOfKeys);
     CheckAndMergeRedistributeNode(LoneLeaf);
 
     //replace keys in middle of inter2[0], inter2[numLeaf2-1]
     ReplaceMidOfTwoAdjacentLeaves(inter2[0], inter2[numLeaf2-1], startIndexLeaf2, endIndexLeaf2,
-                                  keysToMoveInLoneLeaf, numToMoveInLoneLeaf);
+                                  keysToMoveInLoneLeaf, poitnersToMoveInLoneLeaf, numToMoveInLoneLeaf);
     delete []keysToInsertAfterFullLeaves;
+    delete []pointersToInsertAfterFullLeaves;
     delete []keysToMoveInBeginInter2;
+    delete []poitnersToMoveInBeginInter2;
     delete []keysToMoveInLoneLeaf;
+    delete []poitnersToMoveInLoneLeaf;
 }
 
 
-void DAstatic::Move(int start_, int end_, int des_) {
+void DynamicArray::Move(int start_, int end_, int des_) {
     int start = start_, end = end_, des = des_;
     if (des > NumItems) {
         des = NumItems;
@@ -3949,18 +5271,42 @@ void DAstatic::Move(int start_, int end_, int des_) {
         }
     }
 
+    CutArray(start);
+    //PrintTree();
+    CutArray(end+1);
+    //PrintTree();
     int toindex = -1;
-    NodeForStree * toleaf = findLeaf(des, &toindex);
-    if (des > NumItems) {
-        toindex ++;
-    }
+    NodeDA * toleaf = CutForDesInMove(des, &toindex);
+    //printf("after CutForDesInMove\n");
+    //PrintDA();
+    //toleaf, toindex := da.CutForDesInMove(des);
     int startIndexLeaf1, endIndexLeaf1;
-    NodeForStree ** inter1 = nullptr;
+    NodeDA ** inter1 = nullptr;
     int numLeaf1 = RangePosInLeafPointer(start, end, &inter1, &startIndexLeaf1, &endIndexLeaf1);
+    //inter1, numLeaf1, startIndexLeaf1, endIndexLeaf1 := da.RangePosInLeafPointer(start, end);
+    //printf("before RealMove, da\n");
+    //PrintTree();
     RealMove(startIndexLeaf1, endIndexLeaf1, inter1, numLeaf1, toleaf, toindex);
+    //printf("after realmove: \n");
+    //PrintDA();
+    if (des < start) {
+        CheckMinArrayAfterSwap(des-1);
+        CheckMinArrayAfterSwap(des);
+        CheckMinArrayAfterSwap(des + end-start);
+        CheckMinArrayAfterSwap(des + end-start + 1);
+        CheckMinArrayAfterSwap(end);
+        CheckMinArrayAfterSwap(end+1);
+    } else {
+        CheckMinArrayAfterSwap(start-1);
+        CheckMinArrayAfterSwap(start);
+        CheckMinArrayAfterSwap(des - (end-start+1)-1);
+        CheckMinArrayAfterSwap(des - (end-start+1));
+        CheckMinArrayAfterSwap(des-1);
+        CheckMinArrayAfterSwap(des);
+    }
 }
 
-void DAstatic::RealMove(int startIndexLeaf1, int endIndexLeaf1, NodeForStree ** inter1, int numLeaf1, NodeForStree * toleaf, int toindex) {
+void DynamicArray::RealMove(int startIndexLeaf1, int endIndexLeaf1, NodeDA ** inter1, int numLeaf1, NodeDA * toleaf, int toindex) {
     if (numLeaf1 == 1) {
         MoveWhenLenIs1(inter1, numLeaf1, startIndexLeaf1, endIndexLeaf1, toleaf, toindex);
         return;
@@ -3975,12 +5321,12 @@ void DAstatic::RealMove(int startIndexLeaf1, int endIndexLeaf1, NodeForStree ** 
         return;
     } else if (toleaf== inter1[numLeaf1-1]->Next) {
         if (endIndexLeaf1== inter1[numLeaf1-1]->NumOfKeys-1) {
-            NodeForStree ** leaves = new NodeForStree*[1];
+            NodeDA ** leaves = new NodeDA *[1];
             leaves[0] = toleaf;
             SwapRangesAdjacent(inter1, leaves, numLeaf1, 1, startIndexLeaf1, endIndexLeaf1, 0, toindex-1);
             delete []leaves;
         } else {
-            NodeForStree ** leaves = new NodeForStree*[2];
+            NodeDA ** leaves = new NodeDA *[2];
             leaves[0] = inter1[numLeaf1-1];
             leaves[1] = toleaf;
             swapHeadTailLen2Is2(inter1, leaves, numLeaf1, 2, startIndexLeaf1, endIndexLeaf1, endIndexLeaf1+1, toindex-1);
@@ -3988,12 +5334,12 @@ void DAstatic::RealMove(int startIndexLeaf1, int endIndexLeaf1, NodeForStree ** 
         }
     } else if (toleaf->Next == inter1[0]) {
         if (startIndexLeaf1==0) {
-            NodeForStree ** leaves = new NodeForStree*[1];
+            NodeDA ** leaves = new NodeDA *[1];
             leaves[0] = toleaf;
             SwapRangesAdjacent(leaves, inter1, 1, numLeaf1, toindex, toleaf->NumOfKeys-1, startIndexLeaf1, endIndexLeaf1);
             delete []leaves;
         } else {
-            NodeForStree ** leaves = new NodeForStree*[2];
+            NodeDA ** leaves = new NodeDA *[2];
             leaves[0] = toleaf;
             leaves[1] = inter1[0];
             swapHeadTailLen1Is2(leaves, inter1, 2, numLeaf1, toindex, startIndexLeaf1-1, startIndexLeaf1, endIndexLeaf1);
@@ -4005,7 +5351,7 @@ void DAstatic::RealMove(int startIndexLeaf1, int endIndexLeaf1, NodeForStree ** 
     }
 }
 
-void DAstatic::MoveToLeafIsFirstLeaf(NodeForStree ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeForStree * toleaf, int toindex) {
+void DynamicArray::MoveToLeafIsFirstLeaf(NodeDA ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeDA * toleaf, int toindex) {
     if (numLeaf1 == 1) {
         swapHeadTail11(toleaf, toindex, startIndexLeaf1-1, startIndexLeaf1, endIndexLeaf1);
         return;
@@ -4018,7 +5364,7 @@ void DAstatic::MoveToLeafIsFirstLeaf(NodeForStree ** inter1, int numLeaf1, int s
     }
 }
 
-void DAstatic::MoveToLeafIsLastLeaf(NodeForStree ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeForStree * toleaf, int toindex) {
+void DynamicArray::MoveToLeafIsLastLeaf(NodeDA ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeDA * toleaf, int toindex) {
     if (numLeaf1==1) {
         swapHeadTail11(toleaf, startIndexLeaf1, endIndexLeaf1, endIndexLeaf1+1, toindex-1);
         return;
@@ -4031,11 +5377,12 @@ void DAstatic::MoveToLeafIsLastLeaf(NodeForStree ** inter1, int numLeaf1, int st
     }
 }
 
-void DAstatic::Move1(NodeForStree ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeForStree * toleaf, int toindex) {
-    //NodeForStree ** leafToMove = new NodeForStree* [numLeaf1-2];
+void DynamicArray::Move1(NodeDA ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeDA * toleaf, int toindex) {
+    //NodeDA ** leafToMove = new NodeDA * [numLeaf1-2];
     int NumLeafToMove = numLeaf1-2;
-    NodeForStree ** leafToMove = &inter1[1]; // only move whole leaves
-    NodeForStree * fl = inter1[0];
+    NodeDA ** leafToMove = &inter1[1]; // only move whole leaves
+
+    NodeDA * fl = inter1[0];// findPrevious(leafToMove[0]);
     if (fl != nullptr) {
         fl->Next = leafToMove[NumLeafToMove-1]->Next;
         /*
@@ -4044,55 +5391,62 @@ void DAstatic::Move1(NodeForStree ** inter1, int numLeaf1, int startIndexLeaf1, 
         }
          */
     }
-    NodeForStree * preLeaf = deleteMulEntry(leafToMove, NumLeafToMove);
+    NodeDA * preLeaf = deleteMulEntry(leafToMove, NumLeafToMove);
     CallRedistributeMergeRecomputeKeysInAncestorsLeftPart(preLeaf, leafToMove, NumLeafToMove);
 
     int startIndex = getIndexInParent(toleaf)+1;
-    NodeForStree * toParent = toleaf->Parent;
+    NodeDA * toParent = toleaf->Parent;
     insertLeavesIntoLeafParent(toParent, startIndex, leafToMove, NumLeafToMove);
 
     int numKeysBefore = inter1[0]->NumOfKeys - startIndexLeaf1;
     int * KeysBefore = new int[numKeysBefore];
+    NodeDA ** PointersBefore = new NodeDA *[numKeysBefore];
     for (int i = 0; i < numKeysBefore; i ++) {
         KeysBefore[i] = inter1[0]->Keys[startIndexLeaf1+i];
+        PointersBefore[i] = inter1[0]->Pointers[startIndexLeaf1+i];
     }
 
     int numKeysAfter = endIndexLeaf1+1 + toleaf->NumOfKeys - toindex;
     int * KeysAfter = new int[numKeysAfter];// make([]int, numKeysAfter);
+    NodeDA ** PointersAfter = new NodeDA *[numKeysAfter];
     int afterIdx = 0;
     for (int i = 0; i < endIndexLeaf1+1; i ++) {
         KeysAfter[i] = inter1[numLeaf1-1]->Keys[i];
+        PointersAfter[i] = inter1[numLeaf1-1]->Pointers[i];
         afterIdx++;
     }
     for (int j = toindex; j < toleaf->NumOfKeys; ++j) {
         KeysAfter[afterIdx] = toleaf->Keys[j];
+        PointersAfter[afterIdx] = toleaf->Pointers[j];
         afterIdx++;
     }
 
-    insertKeysIntoLeaf(KeysAfter, numKeysAfter, inter1[numLeaf1-2], inter1[numLeaf1-2]->NumOfKeys);
-    insertKeysIntoLeaf(KeysBefore, numKeysBefore, inter1[1], 0);
+    insertKeysIntoLeaf(KeysAfter, PointersAfter, numKeysAfter, inter1[numLeaf1-2], inter1[numLeaf1-2]->NumOfKeys);
+    insertKeysIntoLeaf(KeysBefore, PointersBefore, numKeysBefore, inter1[1], 0);
     toleaf->NumOfKeys = toindex;
     CompleteAdjustAncestorNodesAfterDelete(toleaf);
     DeleteMidPartOfTwoAdjacentLeaves(inter1[0], startIndexLeaf1, inter1[numLeaf1-1], endIndexLeaf1);
+    delete []PointersAfter;
     delete []KeysAfter;
+    delete []PointersBefore;
     delete []KeysBefore;
 }
 
 
-void DAstatic::MoveWhenLenIs1(NodeForStree ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeForStree * toleaf, int toIndex) {
-    NodeForStree * fromLeaf = inter1[0];
+void DynamicArray::MoveWhenLenIs1(NodeDA ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeDA * toleaf, int toIndex) {
+    NodeDA * fromLeaf = inter1[0];
     if (fromLeaf->Next == toleaf) {
         if (endIndexLeaf1 < fromLeaf->NumOfKeys-1) {
             swapHeadTail12(fromLeaf, toleaf, startIndexLeaf1, endIndexLeaf1, endIndexLeaf1+1, toIndex-1);
         } else {
-            SwapRangesAdjacentWhenLensAreBoth1(fromLeaf, toleaf, startIndexLeaf1, endIndexLeaf1, 0, toIndex-1);
+            SWapRangesAdjacentWhenLensAreBoth1(fromLeaf, toleaf, startIndexLeaf1, endIndexLeaf1, 0, toIndex-1);
         }
         return;
     } else if (toleaf->Next == fromLeaf) {
         if (startIndexLeaf1 > 0) {
             swapHeadTail21(toleaf, fromLeaf, toIndex, startIndexLeaf1-1, startIndexLeaf1, endIndexLeaf1);
         } else {
-            SwapRangesAdjacentWhenLensAreBoth1(toleaf, fromLeaf, toIndex, toleaf->NumOfKeys-1, 0, endIndexLeaf1);
+            SWapRangesAdjacentWhenLensAreBoth1(toleaf, fromLeaf, toIndex, toleaf->NumOfKeys-1, 0, endIndexLeaf1);
         }
         return;
     }
@@ -4100,13 +5454,17 @@ void DAstatic::MoveWhenLenIs1(NodeForStree ** inter1, int numLeaf1, int startInd
     if (fromLeaf != toleaf) {
         int NumKeys = endIndexLeaf1-startIndexLeaf1+1;
         int * Keys = new int[NumKeys];// make([]int, NumKeys)
+        NodeDA ** Pointers = new NodeDA * [NumKeys];
+        //Pointers = make([]interface{}, NumKeys)
         for (int i = startIndexLeaf1; i <= endIndexLeaf1; i ++) {
             Keys[i-startIndexLeaf1] = fromLeaf->Keys[i];
+            Pointers[i-startIndexLeaf1] = fromLeaf->Pointers[i];
         }
-        insertKeysIntoLeaf(Keys, NumKeys, toleaf, toIndex);
+        insertKeysIntoLeaf(Keys, Pointers, NumKeys, toleaf, toIndex);
         movePointerInNodeForward(fromLeaf, endIndexLeaf1+1, fromLeaf->NumOfKeys-1, startIndexLeaf1);
         fromLeaf->NumOfKeys -= NumKeys;
         CompleteAdjustAncestorNodesAfterDelete(fromLeaf);
+        delete []Pointers;
         delete []Keys;
         return;
     } else {
@@ -4119,14 +5477,14 @@ void DAstatic::MoveWhenLenIs1(NodeForStree ** inter1, int numLeaf1, int startInd
 }
 
 
-void DAstatic::MoveWhenLenIs2(NodeForStree ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeForStree * toleaf, int toIndex) {
-    NodeForStree * fromLeaf1 = inter1[0];
-    NodeForStree * fromLeaf2 = inter1[1];
+void DynamicArray::MoveWhenLenIs2(NodeDA ** inter1, int numLeaf1, int startIndexLeaf1, int endIndexLeaf1, NodeDA * toleaf, int toIndex) {
+    NodeDA * fromLeaf1 = inter1[0];
+    NodeDA * fromLeaf2 = inter1[1];
     if (toleaf->Next == fromLeaf1) {
         if (startIndexLeaf1 > 0) {
             swapHeadTail22(toleaf, fromLeaf1, fromLeaf2, toIndex, startIndexLeaf1-1, startIndexLeaf1, endIndexLeaf1);
         } else {
-            SwapRangesAdjacentWhenLensAre1And2(toleaf, fromLeaf1, fromLeaf2, toIndex, toleaf->NumOfKeys-1, startIndexLeaf1, endIndexLeaf1);
+            SWapRangesAdjacentWhenLensAre1And2(toleaf, fromLeaf1, fromLeaf2, toIndex, toleaf->NumOfKeys-1, startIndexLeaf1, endIndexLeaf1);
         }
         return;
     } else if (fromLeaf2->Next ==toleaf) {
@@ -4142,16 +5500,20 @@ void DAstatic::MoveWhenLenIs2(NodeForStree ** inter1, int numLeaf1, int startInd
         int NumKeys = endIndexLeaf1 + 1 + fromLeaf1->NumOfKeys - startIndexLeaf1;
         int * Keys = new int[NumKeys];// make([]int, NumKeys)
         int ik = 0;
+        NodeDA ** Pointers = new NodeDA *[NumKeys];
         for (int i = startIndexLeaf1; i < fromLeaf1->NumOfKeys; i ++) {
             Keys[ik] = fromLeaf1->Keys[i];
+            Pointers[ik] = fromLeaf1->Pointers[i];
             ik++;
         }
         for (int i = 0; i <= endIndexLeaf1; i ++) {
             Keys[ik] = fromLeaf2->Keys[i];
+            Pointers[ik] = fromLeaf2->Pointers[i];
             ik++;
         }
-        insertKeysIntoLeaf(Keys, NumKeys, toleaf, toIndex);
+        insertKeysIntoLeaf(Keys, Pointers, NumKeys, toleaf, toIndex);
         DeleteMidPartOfTwoAdjacentLeaves(fromLeaf1, startIndexLeaf1, fromLeaf2, endIndexLeaf1);
+        delete []Pointers;
         delete []Keys;
         return;
     } else {
@@ -4162,4 +5524,172 @@ void DAstatic::MoveWhenLenIs2(NodeForStree ** inter1, int numLeaf1, int startInd
         }
     }
 }
+
+NodeDA * DynamicArray::CutForDesInMove(int des, int* toIndex) {
+    int IndexInLeaf, IndexInArray;
+    NodeDA * leaf = findLeaf(des, &IndexInLeaf, &IndexInArray);
+    if (des > NumItems) {
+        *toIndex = IndexInLeaf + 1;
+        return leaf;
+    }
+    if (IndexInArray == 0) {
+        *toIndex = IndexInLeaf;
+        return leaf;
+    } else {
+        int * tmp = reinterpret_cast<int *>(leaf->Pointers[IndexInLeaf]);
+        int oldlen = leaf->Keys[IndexInLeaf];
+        int leftl = IndexInArray;
+        int rightl = oldlen-leftl;
+
+        if (leftl >= Capacity && rightl >= Capacity) {
+            leaf->Keys[IndexInLeaf] = leftl;
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(tmp);
+            int * righta = &tmp[IndexInArray];
+            if (leaf->NumOfKeys < Capacity) {
+                insertOneIntoLeafForCut(leaf, righta, rightl, IndexInLeaf+1);
+                *toIndex = IndexInLeaf + 1;
+                return leaf;
+            } else {
+                return insertOneIntoLeafAfterSplittingForMove(leaf, righta, rightl, IndexInLeaf+1, toIndex);
+            }
+        } else if (leftl >= Capacity) {
+            int * righta = new int[Capacity];
+            //righta := make([]int, Capacity)
+            for (int i = 0; i < rightl; i ++) {
+                righta[i] = tmp[IndexInArray+i];
+            }
+            leaf->Keys[IndexInLeaf] = leftl;
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(tmp);
+            if (leaf->NumOfKeys < Capacity) {
+                insertOneIntoLeafForCut(leaf, righta, rightl, IndexInLeaf+1);
+                *toIndex = IndexInLeaf + 1;
+                return leaf;
+            } else {
+                return insertOneIntoLeafAfterSplittingForMove(leaf, righta, rightl, IndexInLeaf+1, toIndex);
+            }
+        } else if (rightl >= Capacity) {
+            int * lefta = new int[Capacity];
+            //lefta := make([]int, Capacity)
+            for (int i = 0; i < leftl; i ++) {
+                lefta[i] = tmp[i];
+            }
+            leaf->Keys[IndexInLeaf] = leftl;
+            leaf->Pointers[IndexInLeaf] = reinterpret_cast<NodeDA *>(lefta);
+            int * righta = &tmp[IndexInArray];
+            if (leaf->NumOfKeys < Capacity) {
+                insertOneIntoLeafForCut(leaf, righta, rightl, IndexInLeaf+1);
+                *toIndex = IndexInLeaf + 1;
+                return leaf;
+            } else {
+                return insertOneIntoLeafAfterSplittingForMove(leaf, righta, rightl, IndexInLeaf+1, toIndex);
+            }
+        } else {
+            int * righta = new int[Capacity];
+            //righta := make([]int, Capacity)
+            for (int i = 0; i < rightl; i ++) {
+                righta[i] = tmp[IndexInArray+i];
+            }
+            leaf->Keys[IndexInLeaf] = leftl;
+            if (leaf->NumOfKeys < Capacity) {
+                insertOneIntoLeafForCut(leaf, righta, rightl, IndexInLeaf+1);
+                *toIndex = IndexInLeaf+1;
+                return leaf;
+            } else {
+                return insertOneIntoLeafAfterSplittingForMove(leaf, righta, rightl, IndexInLeaf+1, toIndex);
+            }
+        }
+    }
+}
+
+NodeDA * DynamicArray::insertOneIntoLeafAfterSplittingForMove(NodeDA * leaf, int * newID, int length, int indexInLeaf, int * toIndex) {
+    NodeDA * new_leaf;
+    int split= Min, i, newIndex = -1;
+    int LeafNumPointers = 0, NewLeafNumPointers = 0;
+    new_leaf = makeLeafonedp(Capacity);
+
+    leaf->NumOfKeys = split;
+    new_leaf->NumOfKeys = Capacity + 1 - split;
+
+    if (indexInLeaf < split) { // new array is in leaf (old leaf)
+        int j = Capacity - 1;
+        for (i = new_leaf->NumOfKeys - 1; i >= 0; i--) {
+            new_leaf->Keys[i] = leaf->Keys[j];
+            leaf->Keys[j] = 0;
+            new_leaf->Pointers[i] = leaf->Pointers[j];
+            leaf->Pointers[j] = nullptr;
+            j--;
+            NewLeafNumPointers += new_leaf->Keys[i];
+        }
+        for (i = split - 1; i > indexInLeaf; i--) {
+            leaf->Pointers[i] = leaf->Pointers[i-1];
+            leaf->Keys[i] = leaf->Keys[i-1];
+            LeafNumPointers += leaf->Keys[i];
+        }
+        LeafNumPointers += length;
+        leaf->Keys[i] = length;
+        leaf->Pointers[i] = reinterpret_cast<NodeDA *>(newID);
+        newIndex = i;
+        i--;
+        for (; i >= 0; i--) {
+            LeafNumPointers += leaf->Keys[i];
+        }
+
+        new_leaf->Parent = leaf->Parent;
+        new_leaf->IsLeaf = true;
+        new_leaf->Next = leaf->Next;
+        /*
+        if (new_leaf->Next != nullptr) {
+            new_leaf->Next->Previous = new_leaf;
+        }
+        new_leaf->Previous = leaf;
+         */
+        leaf->Next = new_leaf;
+        insertIntoParent(leaf, LeafNumPointers, new_leaf, NewLeafNumPointers);
+
+        *toIndex = newIndex;
+        return leaf;
+    } else { // new array is in new_leaf
+        indexInLeaf -= split;
+        for (i = 0; i < new_leaf->NumOfKeys; i++) {
+            if (i == indexInLeaf) {
+                NewLeafNumPointers += length;
+                new_leaf->Keys[i] = length;
+                new_leaf->Pointers[i] = reinterpret_cast<NodeDA *>(newID);
+                newIndex = i;
+                break;
+            } else {
+                new_leaf->Keys[i] = leaf->Keys[i+split];
+                leaf->Keys[i+split] = 0;
+                new_leaf->Pointers[i] = leaf->Pointers[i+split];
+                leaf->Pointers[i+split] = nullptr;
+                NewLeafNumPointers += new_leaf->Keys[i];
+            }
+        }
+        i++;
+        for (; i < new_leaf->NumOfKeys; i++) {
+            new_leaf->Keys[i] = leaf->Keys[i-1+split];
+            leaf->Keys[i-1+split] = 0;
+            new_leaf->Pointers[i] = leaf->Pointers[i-1+split];
+            leaf->Pointers[i-1+split] = nullptr;
+            NewLeafNumPointers += new_leaf->Keys[i];
+        }
+        for (int y = 0; y < leaf->NumOfKeys; y++) {
+            LeafNumPointers += leaf->Keys[y];
+        }
+        new_leaf->Parent = leaf->Parent;
+        new_leaf->IsLeaf = true;
+        new_leaf->Next = leaf->Next;
+        /*
+        if (new_leaf->Next != nullptr) {
+            new_leaf->Next->Previous = new_leaf;
+        }
+        new_leaf->Previous = leaf;
+         */
+        leaf->Next = new_leaf;
+        insertIntoParent(leaf, LeafNumPointers, new_leaf, NewLeafNumPointers);
+        *toIndex = newIndex;
+        return new_leaf;
+    }
+}
+
 

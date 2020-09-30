@@ -1,8 +1,8 @@
 all: reorder
 
-reorder: reorder.cpp 	../../../../HeaderFiles/DAstatic.cpp ../../../../HeaderFiles/DAstatic.h \
-                   	../../../../HeaderFiles/DAnolimit.cpp ../../../../HeaderFiles/DAnolimit.h \
-                   	../../../../HeaderFiles/DynamicArray.cpp ../../../../HeaderFiles/DynamicArray.h
-	g++ -std=c++11 ../../../../HeaderFiles/DynamicArray.cpp ../../../../HeaderFiles/DAnolimit.cpp \
-                   	../../../../HeaderFiles/DAstatic.cpp reorder.cpp -o reorder
+reorder: reorder.cpp 	../../../../HeaderFiles/ADAstatic.cpp ../../../../HeaderFiles/ADAstatic.h \
+                   	../../../../HeaderFiles/ADAnolimit.cpp ../../../../HeaderFiles/ADAnolimit.h \
+                   	../../../../HeaderFiles/AdaptiveDynamicArray.cpp ../../../../HeaderFiles/AdaptiveDynamicArray.h
+	g++ -std=c++11 ../../../../HeaderFiles/AdaptiveDynamicArray.cpp ../../../../HeaderFiles/ADAnolimit.cpp \
+                   	../../../../HeaderFiles/ADAstatic.cpp reorder.cpp -o reorder
 

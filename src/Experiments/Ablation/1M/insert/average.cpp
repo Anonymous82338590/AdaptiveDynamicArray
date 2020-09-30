@@ -5,9 +5,9 @@
 #include <sstream> // std::stringstream
 #include <string>
 #include <algorithm>
-#include "../../../../HeaderFiles/DAnolimit.h"
-#include "../../../../HeaderFiles/DAstatic.h"
-#include "../../../../HeaderFiles/DynamicArray.h"
+#include "../../../../HeaderFiles/ADAnolimit.h"
+#include "../../../../HeaderFiles/ADAstatic.h"
+#include "../../../../HeaderFiles/AdaptiveDynamicArray.h"
 using namespace std;
 
 long long Tda[100], Tdanl[100], Tst[100];

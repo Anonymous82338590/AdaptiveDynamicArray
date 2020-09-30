@@ -8,9 +8,9 @@
 #include <chrono>
 #include <random>
 #include <algorithm>
-#include "../../../../HeaderFiles/DAnolimit.h"
-#include "../../../../HeaderFiles/DAstatic.h"
-#include "../../../../HeaderFiles/DynamicArray.h"
+#include "../../../../HeaderFiles/ADAnolimit.h"
+#include "../../../../HeaderFiles/ADAstatic.h"
+#include "../../../../HeaderFiles/AdaptiveDynamicArray.h"
 using namespace std;
 typedef std::chrono::high_resolution_clock::time_point TimeVar;
 #define duration(a) std::chrono::duration_cast<std::chrono::nanoseconds>(a).count()
